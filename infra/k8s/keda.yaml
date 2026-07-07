@@ -1,0 +1,30 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: azure-servicebus-auth
+  namespace: shoppulse
+spec:
+  secretTargetRef:
+    - parameter: connection
+      name: shoppulse-secrets
+      key: SERVICE_BUS_CONNECTION_STRING
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker-scaler
+  namespace: shoppulse
+spec:
+  scaleTargetRef:
+    name: worker
+  pollingInterval: 15
+  cooldownPeriod: 60
+  minReplicaCount: 0
+  maxReplicaCount: 3
+  triggers:
+    - type: azure-servicebus
+      metadata:
+        queueName: sales-events
+        messageCount: "5"
+      authenticationRef:
+        name: azure-servicebus-auth

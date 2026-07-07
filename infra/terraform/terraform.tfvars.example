@@ -1,0 +1,32 @@
+# Copy to terraform.tfvars and fill in your values:
+#   cp terraform.tfvars.example terraform.tfvars
+
+subscription_id = "00000000-0000-0000-0000-000000000000"
+location        = "polandcentral"
+environment     = "dev"
+project_name    = "shoppulse"
+
+tags = {
+  team = "platform"
+}
+
+# AKS sizing — tuned for Azure for Students quota (6 vCPU total, DSv4 family)
+system_node_vm_size     = "Standard_D2s_v4"
+system_node_count       = 1
+workload_node_vm_size   = "Standard_D2s_v4"
+workload_node_min_count = 1
+workload_node_max_count = 2
+
+# Data tier (dev defaults)
+postgres_sku_name = "B_Standard_B1ms"
+redis_sku_name = "Balanced_B0"
+servicebus_sku    = "Standard"
+
+# Queue names from servicebus-config.json
+servicebus_queue_names = ["sales-events"]
+
+# Kubernetes
+k8s_namespace               = "shoppulse"
+keda_service_account_name   = "keda-servicebus"
+worker_service_account_name = "worker"
+api_service_account_name    = "api"
