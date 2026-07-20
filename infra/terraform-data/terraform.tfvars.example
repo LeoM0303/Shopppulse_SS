@@ -1,0 +1,13 @@
+# Usually empty — no secrets / IDs in git.
+#
+# Before any terraform command:
+#   $env:ARM_SUBSCRIPTION_ID = (az account show --query id -o tsv)
+#
+# Names default to shoppulse-dev-rg / shoppulse-dev-vnet (from project_name + environment).
+# Location is taken from the existing resource group.
+#
+# First apply from laptop (open KV temporarily; IP auto-detected):
+#   terraform apply -auto-approve -var="key_vault_public_network_access_enabled=true"
+#
+# Lock Key Vault (no public access). If 403 ForbiddenByFirewall, open KV again first, then:
+#   terraform apply -auto-approve -refresh=false -var="key_vault_public_network_access_enabled=false"
