@@ -40,23 +40,23 @@ curl -s -X POST http://localhost:8000/api/events \
 
 Open http://localhost:3000/dashboard. It polls every 10 seconds. A **LIVE (cache)** badge means the worker has processed at least one event and the Redis cache is warm; **FALLBACK (db)** means it is querying PostgreSQL directly.
 
-## Azure AKS (dev)
+## Azure AKS (full stack — separate from data-layer task)
 
-Uses **real Azure Service Bus** in the cloud — no local emulator. Queue depth and messages: [Azure Portal](https://portal.azure.com) → resource group `shoppulse-dev-rg` → Service Bus namespace → Queues → `sales-events`.
+Full AKS app deploy: [infra/k8s/README.md](infra/k8s/README.md), [infra/terraform/README.md](infra/terraform/README.md).
 
-After `terraform apply` and `.\scripts\deploy.ps1`, open the app in the browser:
-
-- **Frontend:** http://134.112.0.53
-- **Dashboard:** http://134.112.0.53/dashboard
-
-The LoadBalancer IP may change after `az aks stop` / `az aks start`. Get the current URL:
+After deploy, get the frontend URL:
 
 ```powershell
 kubectl get svc frontend -n shoppulse
 ```
 
-Deploy and infra details: [infra/k8s/README.md](infra/k8s/README.md), [infra/terraform/README.md](infra/terraform/README.md).
+## Azure data layer (private endpoints task)
 
+Terraform stack for ACR, Key Vault, Managed Redis, and PostgreSQL with **no public endpoints**:
+
+→ **[infra/terraform-data/README.md](infra/terraform-data/README.md)**
+
+Includes bootstrap network, Key Vault lock-down steps, and Redis private-link verification via jumpbox.
 ## Environment variable reference
 
 ### API (`api/`)

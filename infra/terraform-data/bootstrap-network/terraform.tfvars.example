@@ -1,0 +1,9 @@
+# Usually empty — subscription comes from Azure CLI:
+#   $env:ARM_SUBSCRIPTION_ID = (az account show --query id -o tsv)
+#
+# Names are derived: {project}-{environment}-rg / -vnet
+# Override only if you need non-defaults:
+
+# location    = "polandcentral"
+# project_name = "shoppulse"
+# environment  = "dev"
