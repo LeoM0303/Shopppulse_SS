@@ -1,10 +1,12 @@
 variable "subscription_id" {
-  description = "Azure subscription ID"
+  description = "Azure subscription ID. Prefer ARM_SUBSCRIPTION_ID env if null."
   type        = string
+  default     = null
+  nullable    = true
 }
 
 variable "location" {
-  description = "Azure region for all resources"
+  description = "Azure region (used when create_network=true). Ignored when attaching to an existing RG."
   type        = string
   default     = "polandcentral"
 }
@@ -27,97 +29,135 @@ variable "tags" {
   default     = {}
 }
 
-# --- Network ---
+# --- Modes ---
+
+variable "create_network" {
+  description = "true = create RG/VNet/subnets. false = use existing network via data sources."
+  type        = bool
+  default     = true
+}
+
+variable "enable_aks" {
+  description = "true = identity, AKS, Workload Identity, K8s SAs, ACR pull roles. false = data plane only."
+  type        = bool
+  default     = true
+}
+
+variable "enable_servicebus" {
+  description = "true = Service Bus namespace + queues + KV secrets. false = skip messaging."
+  type        = bool
+  default     = true
+}
+
+# --- Existing network (create_network=false) ---
+
+variable "resource_group_name" {
+  description = "Existing RG name. Default: {project}-{environment}-rg"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "vnet_name" {
+  description = "Existing VNet name. Default: {project}-{environment}-vnet"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "private_endpoints_subnet_name" {
+  type    = string
+  default = "private-endpoints"
+}
+
+variable "postgres_subnet_name" {
+  type    = string
+  default = "postgres"
+}
+
+variable "aks_subnet_name" {
+  description = "Existing AKS subnet name (required when create_network=false and enable_aks=true)"
+  type        = string
+  default     = "aks"
+}
+
+# --- Network (create_network=true) ---
 
 variable "vnet_address_space" {
-  description = "Address space for the virtual network"
-  type        = string
-  default     = "10.0.0.0/16"
+  type    = string
+  default = "10.0.0.0/16"
 }
 
 variable "aks_subnet_prefix" {
-  description = "Address prefix for the AKS subnet"
-  type        = string
-  default     = "10.0.0.0/20"
+  type    = string
+  default = "10.0.0.0/20"
 }
 
 variable "postgres_subnet_prefix" {
-  description = "Address prefix for the PostgreSQL delegated subnet"
-  type        = string
-  default     = "10.0.16.0/24"
+  type    = string
+  default = "10.0.16.0/24"
 }
 
 variable "private_endpoints_subnet_prefix" {
-  description = "Address prefix for private endpoints subnet"
-  type        = string
-  default     = "10.0.17.0/24"
+  type    = string
+  default = "10.0.17.0/24"
 }
 
 # --- AKS ---
 
 variable "kubernetes_version" {
-  description = "Kubernetes version for the AKS cluster"
-  type        = string
-  default     = null
+  type    = string
+  default = null
 }
 
 variable "system_node_vm_size" {
-  description = "VM size for the system node pool"
-  type        = string
-  default     = "Standard_D2s_v4"
+  type    = string
+  default = "Standard_D2s_v4"
 }
 
 variable "system_node_count" {
-  description = "Initial node count for the system node pool"
-  type        = number
-  default     = 1
+  type    = number
+  default = 1
 }
 
 variable "workload_node_vm_size" {
-  description = "VM size for the workload node pool"
-  type        = string
-  default     = "Standard_D2s_v4"
+  type    = string
+  default = "Standard_D2s_v4"
 }
 
 variable "workload_node_min_count" {
-  description = "Minimum nodes in the workload node pool"
-  type        = number
-  default     = 1
+  type    = number
+  default = 1
 }
 
 variable "workload_node_max_count" {
-  description = "Maximum nodes in the workload node pool"
-  type        = number
-  default     = 2
+  type    = number
+  default = 2
 }
 
 # --- PostgreSQL ---
 
 variable "postgres_sku_name" {
-  description = "SKU for PostgreSQL Flexible Server"
-  type        = string
-  default     = "B_Standard_B1ms"
+  type    = string
+  default = "B_Standard_B1ms"
 }
 
 variable "postgres_storage_mb" {
-  description = "Storage size in MB for PostgreSQL"
-  type        = number
-  default     = 32768
+  type    = number
+  default = 32768
 }
 
 variable "postgres_database_name" {
-  description = "Application database name"
-  type        = string
-  default     = "shoppulse"
+  type    = string
+  default = "shoppulse"
 }
 
 variable "postgres_admin_username" {
-  description = "PostgreSQL administrator username"
-  type        = string
-  default     = "shoppulse"
+  type    = string
+  default = "shoppulse"
 }
 
-# --- Redis (Azure Managed Redis — replaces retired Azure Cache for Redis) ---
+# --- Redis ---
 
 variable "redis_sku_name" {
   description = "Azure Managed Redis SKU (Balanced_B0 is smallest dev tier)"
@@ -125,42 +165,58 @@ variable "redis_sku_name" {
   default     = "Balanced_B0"
 }
 
+# --- ACR ---
+
+variable "acr_sku" {
+  description = "ACR SKU — Premium required for private endpoints"
+  type        = string
+  default     = "Premium"
+}
+
 # --- Service Bus ---
 
 variable "servicebus_sku" {
-  description = "Service Bus namespace SKU"
-  type        = string
-  default     = "Standard"
+  type    = string
+  default = "Standard"
 }
 
 variable "servicebus_queue_names" {
-  description = "Queue names to create in the Service Bus namespace"
+  type    = list(string)
+  default = ["sales-events"]
+}
+
+# --- Key Vault laptop bootstrap ---
+
+variable "key_vault_public_network_access_enabled" {
+  description = "Temporarily true when applying from a laptop outside the VNet so secrets can be written."
+  type        = bool
+  default     = false
+}
+
+variable "key_vault_deployer_ip_cidrs" {
+  description = "Optional override. Empty = auto-detect public IP via api.ipify.org when public KV access is enabled."
   type        = list(string)
-  default     = ["sales-events"]
+  default     = []
 }
 
 # --- Kubernetes ---
 
 variable "k8s_namespace" {
-  description = "Kubernetes namespace for ShopPulse workloads"
-  type        = string
-  default     = "shoppulse"
+  type    = string
+  default = "shoppulse"
 }
 
 variable "keda_service_account_name" {
-  description = "Service account name used by KEDA Service Bus scaler"
-  type        = string
-  default     = "keda-servicebus"
+  type    = string
+  default = "keda-servicebus"
 }
 
 variable "worker_service_account_name" {
-  description = "Service account name for the worker workload"
-  type        = string
-  default     = "worker"
+  type    = string
+  default = "worker"
 }
 
 variable "api_service_account_name" {
-  description = "Service account name for the API workload"
-  type        = string
-  default     = "api"
+  type    = string
+  default = "api"
 }
