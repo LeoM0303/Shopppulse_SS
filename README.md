@@ -40,23 +40,18 @@ curl -s -X POST http://localhost:8000/api/events \
 
 Open http://localhost:3000/dashboard. It polls every 10 seconds. A **LIVE (cache)** badge means the worker has processed at least one event and the Redis cache is warm; **FALLBACK (db)** means it is querying PostgreSQL directly.
 
-## Azure AKS (full stack — separate from data-layer task)
+## Azure (Terraform + AKS)
 
-Full AKS app deploy: [infra/k8s/README.md](infra/k8s/README.md), [infra/terraform/README.md](infra/terraform/README.md).
+One Terraform root under [infra/terraform/](infra/terraform/README.md): shared modules, root files per service (`redis.tf`, `aks.tf`, …).
 
-After deploy, get the frontend URL:
+- **Full stack** (default): network + AKS + Service Bus + private data plane  
+- **Data layer only**: `enable_aks=false` (same modules, no AKS)
+
+Kubernetes manifests: [infra/k8s/README.md](infra/k8s/README.md).
 
 ```powershell
 kubectl get svc frontend -n shoppulse
 ```
-
-## Azure data layer (private endpoints task)
-
-Terraform stack for ACR, Key Vault, Managed Redis, and PostgreSQL with **no public endpoints**:
-
-→ **[infra/terraform-data/README.md](infra/terraform-data/README.md)**
-
-Includes bootstrap network, Key Vault lock-down steps, and Redis private-link verification via jumpbox.
 ## Environment variable reference
 
 ### API (`api/`)

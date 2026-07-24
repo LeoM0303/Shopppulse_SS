@@ -1,45 +1,40 @@
-locals {
-  server_name    = "${var.name_prefix}-psql"
-  dns_zone_name  = "${var.name_prefix}.postgres.database.azure.com"
-}
-
-resource "azurerm_private_dns_zone" "this" {
-  name                = local.dns_zone_name
+resource "azurerm_private_dns_zone" "postgres" {
+  name                = "privatelink.postgres.database.azure.com"
   resource_group_name = var.resource_group.name
   tags                = var.tags
 }
 
-resource "azurerm_private_dns_zone_virtual_network_link" "this" {
+resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
   name                  = "${var.name_prefix}-psql-dns-link"
   resource_group_name   = var.resource_group.name
-  private_dns_zone_name = azurerm_private_dns_zone.this.name
+  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
   virtual_network_id    = var.vnet_id
   registration_enabled  = false
   tags                  = var.tags
 }
 
 resource "azurerm_postgresql_flexible_server" "this" {
-  name                   = local.server_name
-  location               = var.location
-  resource_group_name    = var.resource_group.name
-  version                = "16"
-  administrator_login    = var.admin_username
-  administrator_password = var.admin_password
-  storage_mb             = var.storage_mb
-  sku_name               = var.sku_name
-  zone                   = "1"
-  tags                   = var.tags
-
-  delegated_subnet_id = var.subnet_id
-  private_dns_zone_id = azurerm_private_dns_zone.this.id
-
+  name                          = "${var.name_prefix}-psql"
+  location                      = var.location
+  resource_group_name           = var.resource_group.name
+  version                       = "16"
+  administrator_login           = var.admin_username
+  administrator_password        = var.admin_password
+  sku_name                      = var.sku_name
+  storage_mb                    = var.storage_mb
+  backup_retention_days         = var.backup_retention_days
+  geo_redundant_backup_enabled  = var.geo_redundant_backup_enabled
   public_network_access_enabled = false
+  delegated_subnet_id           = var.subnet_id
+  private_dns_zone_id           = azurerm_private_dns_zone.postgres.id
+  zone                          = "1"
+  tags                          = var.tags
 
   authentication {
     password_auth_enabled = true
   }
 
-  depends_on = [azurerm_private_dns_zone_virtual_network_link.this]
+  depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
 
   lifecycle {
     ignore_changes = [zone]

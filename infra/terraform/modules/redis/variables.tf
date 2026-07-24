@@ -18,6 +18,14 @@ variable "resource_group" {
   })
 }
 
+variable "vnet_id" {
+  type = string
+}
+
+variable "private_endpoint_subnet_id" {
+  type = string
+}
+
 variable "sku_name" {
   description = "Azure Managed Redis SKU (e.g. Balanced_B0 for dev)"
   type        = string

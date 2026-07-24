@@ -10,6 +10,14 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.12"
+    }
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.4"
+    }
     kubernetes = {
       source  = "hashicorp/kubernetes"
       version = "~> 2.35"
@@ -32,21 +40,22 @@ provider "azurerm" {
     }
   }
 
+  # null → ARM_SUBSCRIPTION_ID / az CLI default
   subscription_id = var.subscription_id
 }
 
 provider "kubernetes" {
-  host                   = try(module.aks.kube_admin_config[0].host, "")
-  client_certificate     = try(base64decode(module.aks.kube_admin_config[0].client_certificate), "")
-  client_key             = try(base64decode(module.aks.kube_admin_config[0].client_key), "")
-  cluster_ca_certificate = try(base64decode(module.aks.kube_admin_config[0].cluster_ca_certificate), "")
+  host                   = try(module.aks[0].kube_admin_config[0].host, "")
+  client_certificate     = try(base64decode(module.aks[0].kube_admin_config[0].client_certificate), "")
+  client_key             = try(base64decode(module.aks[0].kube_admin_config[0].client_key), "")
+  cluster_ca_certificate = try(base64decode(module.aks[0].kube_admin_config[0].cluster_ca_certificate), "")
 }
 
 provider "helm" {
   kubernetes {
-    host                   = try(module.aks.kube_admin_config[0].host, "")
-    client_certificate     = try(base64decode(module.aks.kube_admin_config[0].client_certificate), "")
-    client_key             = try(base64decode(module.aks.kube_admin_config[0].client_key), "")
-    cluster_ca_certificate = try(base64decode(module.aks.kube_admin_config[0].cluster_ca_certificate), "")
+    host                   = try(module.aks[0].kube_admin_config[0].host, "")
+    client_certificate     = try(base64decode(module.aks[0].kube_admin_config[0].client_certificate), "")
+    client_key             = try(base64decode(module.aks[0].kube_admin_config[0].client_key), "")
+    cluster_ca_certificate = try(base64decode(module.aks[0].kube_admin_config[0].cluster_ca_certificate), "")
   }
 }

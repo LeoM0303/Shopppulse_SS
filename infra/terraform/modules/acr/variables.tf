@@ -18,7 +18,16 @@ variable "resource_group" {
   })
 }
 
+variable "vnet_id" {
+  type = string
+}
+
+variable "private_endpoint_subnet_id" {
+  type = string
+}
+
 variable "sku" {
-  type    = string
-  default = "Basic"
+  description = "ACR SKU — Premium required for private endpoints"
+  type        = string
+  default     = "Premium"
 }

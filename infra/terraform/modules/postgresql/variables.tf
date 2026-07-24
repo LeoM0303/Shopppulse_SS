@@ -19,7 +19,8 @@ variable "resource_group" {
 }
 
 variable "subnet_id" {
-  type = string
+  description = "Subnet delegated to Microsoft.DBforPostgreSQL/flexibleServers"
+  type        = string
 }
 
 variable "vnet_id" {
@@ -45,4 +46,14 @@ variable "sku_name" {
 
 variable "storage_mb" {
   type = number
+}
+
+variable "backup_retention_days" {
+  type    = number
+  default = 7
+}
+
+variable "geo_redundant_backup_enabled" {
+  type    = bool
+  default = false
 }

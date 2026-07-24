@@ -1,32 +1,51 @@
-# Copy to terraform.tfvars and fill in your values:
+# Copy to terraform.tfvars:
 #   cp terraform.tfvars.example terraform.tfvars
+#
+# Subscription (either here or env):
+#   $env:ARM_SUBSCRIPTION_ID = (az account show --query id -o tsv)
 
-subscription_id = "00000000-0000-0000-0000-000000000000"
-location        = "polandcentral"
-environment     = "dev"
-project_name    = "shoppulse"
+# subscription_id = "00000000-0000-0000-0000-000000000000"
+location     = "polandcentral"
+environment  = "dev"
+project_name = "shoppulse"
 
 tags = {
   team = "platform"
 }
 
-# AKS sizing — tuned for Azure for Students quota (6 vCPU total, DSv4 family)
+# Modes (defaults = full AKS stack)
+# create_network    = true
+# enable_aks        = true
+# enable_servicebus = true
+
+# --- Data-layer only example ---
+# enable_aks        = false
+# enable_servicebus = false
+# postgres_sku_name = "GP_Standard_D2s_v3"
+
+# --- Existing VNet example ---
+# create_network = false
+# resource_group_name = "shoppulse-dev-rg"
+# vnet_name           = "shoppulse-dev-vnet"
+
+# AKS sizing — Azure for Students friendly
 system_node_vm_size     = "Standard_D2s_v4"
 system_node_count       = 1
 workload_node_vm_size   = "Standard_D2s_v4"
 workload_node_min_count = 1
 workload_node_max_count = 2
 
-# Data tier (dev defaults)
 postgres_sku_name = "B_Standard_B1ms"
-redis_sku_name = "Balanced_B0"
+redis_sku_name    = "Balanced_B0"
+acr_sku           = "Premium"
 servicebus_sku    = "Standard"
 
-# Queue names from servicebus-config.json
 servicebus_queue_names = ["sales-events"]
 
-# Kubernetes
 k8s_namespace               = "shoppulse"
 keda_service_account_name   = "keda-servicebus"
 worker_service_account_name = "worker"
 api_service_account_name    = "api"
+
+# First apply from laptop: set true, then re-apply with false to lock KV
+# key_vault_public_network_access_enabled = true
