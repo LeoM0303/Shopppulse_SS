@@ -2,6 +2,10 @@
 
 One root stack that calls reusable modules (mentor layout). No separate `terraform-data` copy.
 
+## Kubernetes app manifests
+
+Application Deployment/Service YAML lives in [`./k8s/`](./k8s/) (applied via `scripts/deploy.ps1` or `kubectl`, not as Terraform `kubernetes_*` resources).
+
 ```
 infra/terraform/
 ├── README.md
@@ -150,4 +154,4 @@ terraform output key_vault_name
 terraform output get_aks_credentials_command
 ```
 
-App deploy manifests: [../k8s/README.md](../k8s/README.md).
+App deploy manifests: [./k8s/README.md](./k8s/README.md).

@@ -47,7 +47,7 @@ One Terraform root under [infra/terraform/](infra/terraform/README.md): shared m
 - **Full stack** (default): network + AKS + Service Bus + private data plane  
 - **Data layer only**: `enable_aks=false` (same modules, no AKS)
 
-Kubernetes manifests: [infra/k8s/README.md](infra/k8s/README.md).
+Kubernetes manifests: [infra/terraform/k8s/README.md](infra/terraform/k8s/README.md).
 
 ```powershell
 kubectl get svc frontend -n shoppulse
