@@ -16,7 +16,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $TfDir = Join-Path $RepoRoot "infra\terraform"
-$K8sDir = Join-Path $RepoRoot "infra\k8s"
+$K8sDir = Join-Path $TfDir "k8s"
 $BuildDir = Join-Path $env:TEMP "shoppulse-k8s-build"
 
 # kubelogin/kubectl from `az aks install-cli` are not always on PATH in new shells

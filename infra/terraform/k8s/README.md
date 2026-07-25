@@ -31,21 +31,18 @@ Options:
 1. Applies ACR via Terraform (unless `-SkipTerraform`)
 2. Builds & pushes `shoppulse-api`, `shoppulse-worker`, `shoppulse-frontend` to ACR
 3. Syncs secrets from Key Vault → Kubernetes Secret `shoppulse-secrets`
-4. Applies manifests from `infra/k8s/`
+4. Applies manifests from `infra/terraform/k8s/`
 5. Prints frontend LoadBalancer URL
 
 ## Access in browser
 
-After deploy (or `az aks start`), open:
-
-- **Frontend:** http://134.112.0.53
-- **Dashboard:** http://134.112.0.53/dashboard
-
-IP can change when the cluster is stopped and started. Current address:
+LoadBalancer IP changes after cluster recreate / stop-start — do not hardcode it. After deploy:
 
 ```powershell
 kubectl get svc frontend -n shoppulse -o jsonpath='http://{.status.loadBalancer.ingress[0].ip}{"\n"}'
 ```
+
+Open that URL in the browser; dashboard is at `/dashboard`. `deploy.ps1` also prints the frontend URL when the IP is ready.
 
 ## Architecture in cluster
 
