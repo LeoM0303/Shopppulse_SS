@@ -1,0 +1,29 @@
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional-commits:
+    name: Conventional Commits format
+    runs-on: ubuntu-latest
+    steps:
+      # Squash merges use the PR title as the commit message, so the title is what
+      # ends up in the history on main.
+      - name: Check title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?: .+'
+          if printf '%s' "$TITLE" | grep -Eq "$pattern"; then
+            echo "OK: $TITLE"
+          else
+            echo "PR title must follow Conventional Commits."
+            echo "Examples: 'feat(api): add health endpoint', 'fix: correct redis url', 'ci!: drop python 3.11'"
+            echo "Got: $TITLE"
+            exit 1
+          fi

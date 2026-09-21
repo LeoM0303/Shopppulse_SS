@@ -60,7 +60,10 @@ cd infra/terraform
 cp terraform.tfvars.example terraform.tfvars
 # edit tfvars if needed
 
-terraform init
+# once per subscription: creates the state storage account and writes backend.hcl
+..\..\scripts\bootstrap-state.ps1
+
+terraform init -backend-config=backend.hcl
 terraform apply -var="key_vault_public_network_access_enabled=true"
 # lock Key Vault after secrets are written:
 terraform apply -refresh=false -var="key_vault_public_network_access_enabled=false"

@@ -8,7 +8,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..dependencies import get_db, get_redis
-from ..schemas import DashboardSummary
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
