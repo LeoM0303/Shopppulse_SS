@@ -1,0 +1,11 @@
+# The rule set is pinned so a new ruff release cannot turn CI red on its own.
+#
+# E4  import errors        E7  statement errors        E9  syntax and IO errors
+# F   pyflakes: unused imports, undefined names, unused variables
+#
+# Deliberately not enabled: import sorting and the modernisation rules. FastAPI's
+# `Depends()` in argument defaults and `Optional[...]` annotations are idiomatic here,
+# not mistakes, and rewriting them would be churn rather than a fix.
+
+[lint]
+select = ["E4", "E7", "E9", "F"]
