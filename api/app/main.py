@@ -4,11 +4,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-load_dotenv()
-
+# .database loads the .env file on import, so it must come before the routers,
+# which read os.environ at module level.
 from .database import engine
 from .models import Base
 from .routers import dashboard, events
+
+load_dotenv()
 
 app = FastAPI(title="ShopPulse API")
 

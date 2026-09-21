@@ -11,7 +11,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import AsyncSessionLocal
 from ..dependencies import get_db
 from ..models import SalesEvent
 from ..schemas import EventPayload, EventsResponse, SalesEventOut
