@@ -4,6 +4,8 @@
 *.tfstate.*
 *.tfvars
 !terraform.tfvars.example
+# Per-environment inputs are reviewed like code; only local overrides stay untracked.
+!envs/*.tfvars
 backend.hcl
 crash.log
 crash.*.log
