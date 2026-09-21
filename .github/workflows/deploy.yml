@@ -1,0 +1,177 @@
+# Manual deployment of ShopPulse to AKS. Mirrors scripts/deploy.ps1, but authenticates
+# to Azure with OIDC instead of a local `az login`, and tags images by commit instead of `latest`.
+#
+# One-time setup
+# --------------
+# 1. App registration + federated credential per environment:
+#      az ad app create --display-name shoppulse-github
+#      az ad sp create --id <appId>
+#      az ad app federated-credential create --id <appId> --parameters '{
+#        "name": "gh-dev",
+#        "issuer": "https://token.actions.githubusercontent.com",
+#        "subject": "repo:LeoM0303/Shopppulse_SS:environment:dev",
+#        "audiences": ["api://AzureADTokenExchange"]
+#      }'
+# 2. Role assignments for that service principal:
+#      AcrPush                                     on the registry
+#      Key Vault Secrets User                      on the vault
+#      Azure Kubernetes Service Cluster User Role  on the cluster
+#    If the cluster uses Azure RBAC for Kubernetes, also grant
+#    "Azure Kubernetes Service RBAC Writer" scoped to the shoppulse namespace;
+#    otherwise bind the principal with a native Kubernetes RoleBinding.
+# 3. GitHub environment (Settings > Environments) named dev and/or prod, with variables:
+#      AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
+#      AZURE_RESOURCE_GROUP, AKS_CLUSTER_NAME, ACR_NAME, KEY_VAULT_NAME, SERVICEBUS_NAMESPACE
+#    Add required reviewers on prod to gate the deployment.
+#
+# Network prerequisite
+# --------------------
+# ACR and Key Vault are private by default in this stack, so a GitHub-hosted runner cannot
+# reach their data planes. Before running, either apply Terraform with
+# `-var="acr_public_network_access_enabled=true" -var="key_vault_public_network_access_enabled=true"`
+# and re-lock afterwards, or move this workflow to a self-hosted runner inside the VNet.
+
+name: Deploy to AKS
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: environment
+        required: true
+      image_tag:
+        description: Image tag (defaults to the short commit SHA)
+        type: string
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build, push, deploy
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      NAMESPACE: shoppulse
+      RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AKS_CLUSTER: ${{ vars.AKS_CLUSTER_NAME }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      KEY_VAULT: ${{ vars.KEY_VAULT_NAME }}
+      SERVICEBUS_NAMESPACE: ${{ vars.SERVICEBUS_NAMESPACE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="sha-$(git rev-parse --short HEAD)"
+          fi
+          echo "IMAGE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "Deploying tag $TAG"
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to ACR
+        run: |
+          az acr login --name "$ACR_NAME"
+          echo "ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)" >> "$GITHUB_ENV"
+
+      - name: Build and push images
+        run: |
+          set -euo pipefail
+          for svc in api worker frontend; do
+            image="$ACR_LOGIN_SERVER/shoppulse-$svc:$IMAGE_TAG"
+            echo "::group::$image"
+            if [ "$svc" = "frontend" ]; then
+              # Empty base URL keeps the frontend calling /api on its own origin.
+              docker build --build-arg VITE_API_BASE_URL= -t "$image" "$svc"
+            else
+              docker build -t "$image" "$svc"
+            fi
+            docker push "$image"
+            echo "::endgroup::"
+          done
+
+      - name: Get cluster credentials
+        run: |
+          set -euo pipefail
+          # Install into $HOME to avoid sudo, and expose the binaries to later steps.
+          mkdir -p "$HOME/.local/bin"
+          az aks install-cli \
+            --install-location "$HOME/.local/bin/kubectl" \
+            --kubelogin-install-location "$HOME/.local/bin/kubelogin"
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+          az aks get-credentials --resource-group "$RESOURCE_GROUP" --name "$AKS_CLUSTER" --overwrite-existing
+          # The az login above is federated, so kubelogin can reuse the CLI token.
+          kubelogin convert-kubeconfig -l azurecli
+
+      - name: Sync secrets from Key Vault
+        run: |
+          set -euo pipefail
+          read_secret() {
+            az keyvault secret show --vault-name "$KEY_VAULT" --name "$1" --query value -o tsv
+          }
+          DATABASE_URL="$(read_secret database-url | sed 's/sslmode=require/ssl=require/')"
+          REDIS_URL="$(read_secret redis-url)"
+          SB_CONNECTION="$(read_secret servicebus-connection-string)"
+          for value in "$DATABASE_URL" "$REDIS_URL" "$SB_CONNECTION"; do
+            echo "::add-mask::$value"
+          done
+
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic shoppulse-secrets \
+            --namespace "$NAMESPACE" \
+            --from-literal=DATABASE_URL="$DATABASE_URL" \
+            --from-literal=REDIS_URL="$REDIS_URL" \
+            --from-literal=SERVICE_BUS_CONNECTION_STRING="$SB_CONNECTION" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Render and apply manifests
+        run: |
+          set -euo pipefail
+          mkdir -p build/k8s
+          for file in infra/terraform/k8s/*.yaml; do
+            name="$(basename "$file")"
+            [ "$name" = "secret.yaml" ] && continue
+            sed -e "s|ACR_LOGIN_SERVER|$ACR_LOGIN_SERVER|g" \
+                -e "s|SERVICEBUS_NAMESPACE|$SERVICEBUS_NAMESPACE|g" \
+                -e "s|IMAGE_TAG|$IMAGE_TAG|g" \
+                "$file" > "build/k8s/$name"
+          done
+          kubectl apply -f build/k8s/
+
+      # worker is intentionally omitted: KEDA keeps it at zero replicas until the queue fills.
+      - name: Verify rollout
+        run: |
+          kubectl rollout status deployment/api --namespace "$NAMESPACE" --timeout=5m
+          kubectl rollout status deployment/frontend --namespace "$NAMESPACE" --timeout=5m
+
+      - name: Record deployment result
+        if: always()
+        run: |
+          {
+            echo "### Deploy to ${{ inputs.environment }}"
+            echo ""
+            echo "- Image tag: \`$IMAGE_TAG\`"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Status: ${{ job.status }}"
+            echo ""
+            echo '```'
+            kubectl get pods --namespace "$NAMESPACE" 2>&1 || true
+            kubectl get svc frontend --namespace "$NAMESPACE" 2>&1 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

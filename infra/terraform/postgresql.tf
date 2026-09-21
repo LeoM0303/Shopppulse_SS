@@ -16,8 +16,8 @@ module "postgresql" {
   tags           = local.common_tags
   resource_group = local.resource_group
 
-  subnet_id  = local.postgres_subnet_id
-  vnet_id    = local.vnet_id
+  subnet_id      = local.postgres_subnet_id
+  vnet_id        = local.vnet_id
   admin_username = var.postgres_admin_username
   admin_password = random_password.postgres_admin.result
   database_name  = var.postgres_database_name

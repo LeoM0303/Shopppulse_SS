@@ -4,8 +4,25 @@ resource "azurerm_container_registry" "this" {
   location                      = var.location
   sku                           = var.sku
   admin_enabled                 = false
-  public_network_access_enabled = false
+  public_network_access_enabled = var.public_network_access_enabled
   tags                          = var.tags
+
+  dynamic "network_rule_set" {
+    for_each = var.public_network_access_enabled && length(var.allowed_ip_cidrs) > 0 ? [1] : []
+
+    content {
+      default_action = "Deny"
+
+      dynamic "ip_rule" {
+        for_each = var.allowed_ip_cidrs
+
+        content {
+          action   = "Allow"
+          ip_range = ip_rule.value
+        }
+      }
+    }
+  }
 }
 
 resource "azurerm_private_dns_zone" "acr" {

@@ -8,6 +8,9 @@ module "acr" {
   vnet_id                    = local.vnet_id
   private_endpoint_subnet_id = local.private_endpoints_subnet_id
   sku                        = var.acr_sku
+
+  public_network_access_enabled = var.acr_public_network_access_enabled
+  allowed_ip_cidrs              = var.acr_allowed_ip_cidrs
 }
 
 resource "azurerm_role_assignment" "kubelet_acr_pull" {

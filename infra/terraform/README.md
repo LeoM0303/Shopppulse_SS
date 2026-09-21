@@ -68,6 +68,8 @@ terraform apply -refresh=false -var="key_vault_public_network_access_enabled=fal
 
 Key Vault starts closed (`public_network_access_enabled=false`). The first apply from a laptop must temporarily open it so Terraform can write secrets; your public IP is auto-allowed via `api.ipify.org`.
 
+ACR behaves the same way: it is private by default, so pushing images from a laptop or a GitHub-hosted runner needs `acr_public_network_access_enabled=true` (optionally narrowed with `acr_allowed_ip_cidrs`) and a re-apply with `false` afterwards. A self-hosted runner inside the VNet avoids the toggle entirely.
+
 ## Data-layer only (private endpoints homework)
 
 Same modules — turn AKS off:

@@ -97,20 +97,8 @@ Get-ChildItem $K8sDir -Filter "*.yaml" | ForEach-Object {
     $content = Get-Content $_.FullName -Raw
     $content = $content.Replace("ACR_LOGIN_SERVER", $AcrServer)
     $content = $content.Replace("SERVICEBUS_NAMESPACE", $SbNamespace)
+    $content = $content.Replace("IMAGE_TAG", $ImageTag)
     Set-Content -Path (Join-Path $BuildDir $_.Name) -Value $content -NoNewline
-}
-
-# Patch secret.yaml with real values
-$secretPath = Join-Path $BuildDir "secret.yaml"
-$secret = Get-Content $secretPath -Raw
-$secret = $secret.Replace("REPLACE_ME_DATABASE", $DatabaseUrl)
-# Use careful replacement for secret file
-@(
-    @{ Key = "DATABASE_URL"; Val = $DatabaseUrl },
-    @{ Key = "REDIS_URL"; Val = $RedisUrl },
-    @{ Key = "SERVICE_BUS_CONNECTION_STRING"; Val = $SbConn }
-) | ForEach-Object {
-    # handled below via kubectl create secret
 }
 
 # Create secret via kubectl (avoids yaml escaping issues)
