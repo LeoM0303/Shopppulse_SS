@@ -1,0 +1,7 @@
+# Every pull request requests a review from the owner listed here.
+# Paths are listed separately so responsibility can be split later without rewriting the file.
+
+*                       @LeoM0303
+/infra/                 @LeoM0303
+/.github/workflows/     @LeoM0303
+/scripts/               @LeoM0303
