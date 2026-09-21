@@ -18,8 +18,8 @@ locals {
     id       = data.azurerm_resource_group.existing[0].id
   }
 
-  location                      = local.resource_group.location
-  vnet_id                       = var.create_network ? module.network[0].vnet_id : data.azurerm_virtual_network.existing[0].id
+  location = local.resource_group.location
+  vnet_id  = var.create_network ? module.network[0].vnet_id : data.azurerm_virtual_network.existing[0].id
   aks_subnet_id = (
     var.create_network ? module.network[0].aks_subnet_id :
     var.enable_aks ? data.azurerm_subnet.aks[0].id : null

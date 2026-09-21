@@ -21,7 +21,7 @@ spec:
         workload: apps
       containers:
         - name: api
-          image: ACR_LOGIN_SERVER/shoppulse-api:latest
+          image: ACR_LOGIN_SERVER/shoppulse-api:IMAGE_TAG
           ports:
             - containerPort: 8000
           envFrom:

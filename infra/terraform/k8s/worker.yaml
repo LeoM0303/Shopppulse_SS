@@ -21,7 +21,7 @@ spec:
         workload: apps
       containers:
         - name: worker
-          image: ACR_LOGIN_SERVER/shoppulse-worker:latest
+          image: ACR_LOGIN_SERVER/shoppulse-worker:IMAGE_TAG
           envFrom:
             - configMapRef:
                 name: shoppulse-config

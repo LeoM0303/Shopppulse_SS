@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  terraform:
+    name: Terraform fmt, validate, lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive
+
+      # No backend: validation must not touch Azure or any remote state.
+      - name: terraform init
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        run: terraform validate -no-color
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      # Advisory for now: tflint findings do not block the pipeline yet.
+      - name: tflint
+        continue-on-error: true
+        run: |
+          tflint --init
+          tflint --recursive --minimum-failure-severity=error
+
+  manifests:
+    name: YAML lint and manifest schemas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pipx install yamllint
+
+      - name: yamllint
+        run: yamllint -c .yamllint.yml infra/terraform/k8s docker-compose.yml .github/workflows
+
+      # Manifests carry placeholders (ACR_LOGIN_SERVER, IMAGE_TAG) that stay valid YAML.
+      # KEDA ScaledObject is a CRD, hence -ignore-missing-schemas.
+      - name: kubeconform
+        run: |
+          docker run --rm -v "$PWD":/work ghcr.io/yannh/kubeconform:latest \
+            -strict -ignore-missing-schemas -summary /work/infra/terraform/k8s
+
+  build:
+    name: Build ${{ matrix.service }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, worker, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service }}
+          push: false
+          load: true
+          tags: shoppulse-${{ matrix.service }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Report only: surfaces known CVEs without failing the build.
+      - name: Scan image
+        continue-on-error: true
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --exit-code 0 --severity HIGH,CRITICAL --no-progress \
+            shoppulse-${{ matrix.service }}:ci

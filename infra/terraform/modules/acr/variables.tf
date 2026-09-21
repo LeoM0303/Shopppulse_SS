@@ -31,3 +31,15 @@ variable "sku" {
   type        = string
   default     = "Premium"
 }
+
+variable "public_network_access_enabled" {
+  description = "Open the ACR data plane to the internet — needed to push images from outside the VNet"
+  type        = bool
+  default     = false
+}
+
+variable "allowed_ip_cidrs" {
+  description = "Source ranges allowed when public access is on; empty means any address"
+  type        = list(string)
+  default     = []
+}

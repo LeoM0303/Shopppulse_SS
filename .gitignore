@@ -1,0 +1,23 @@
+# Logs and Terraform plan artifacts
+*.log
+tfplan
+tfplan-*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Editors and OS
+.DS_Store
+Thumbs.db

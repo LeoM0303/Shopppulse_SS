@@ -52,6 +52,14 @@ Kubernetes manifests: [infra/terraform/k8s/README.md](infra/terraform/k8s/README
 ```powershell
 kubectl get svc frontend -n shoppulse
 ```
+
+## CI/CD (GitHub Actions)
+
+- [`ci.yml`](.github/workflows/ci.yml) runs on every pull request and push to `main`: `terraform fmt`/`validate`/`tflint`, `yamllint` plus `kubeconform` on the manifests, and a Docker build of all three images with a Trivy report.
+- [`deploy.yml`](.github/workflows/deploy.yml) is manual (`workflow_dispatch`), authenticates to Azure with OIDC, pushes images tagged `sha-<commit>` and rolls them out to AKS. Required app registration, role assignments and environment variables are listed at the top of the file.
+
+Manifests use the `IMAGE_TAG` placeholder, so both the workflow and [`scripts/deploy.ps1`](scripts/deploy.ps1) deploy exactly the tag they just built.
+
 ## Environment variable reference
 
 ### API (`api/`)

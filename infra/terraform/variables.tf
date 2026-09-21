@@ -173,6 +173,18 @@ variable "acr_sku" {
   default     = "Premium"
 }
 
+variable "acr_public_network_access_enabled" {
+  description = "Temporarily true when pushing images from outside the VNet, e.g. a laptop or a GitHub-hosted runner."
+  type        = bool
+  default     = false
+}
+
+variable "acr_allowed_ip_cidrs" {
+  description = "Source ranges allowed while ACR public access is on. Empty = any address."
+  type        = list(string)
+  default     = []
+}
+
 # --- Service Bus ---
 
 variable "servicebus_sku" {
