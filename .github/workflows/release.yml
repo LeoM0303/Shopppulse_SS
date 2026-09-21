@@ -1,0 +1,73 @@
+# Cutting a release is pushing a semver tag:
+#   git tag -a v1.0.0 -m "First release" && git push origin v1.0.0
+#
+# The GitHub release is always created. Images are only published when ACR_NAME is set,
+# so tagging works before any cloud infrastructure exists.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: read
+
+jobs:
+  release:
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Create release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '');
+            const release = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              generate_release_notes: true,
+              prerelease: tag.includes('-'),
+            });
+            core.info(`Published ${release.data.html_url}`);
+
+  images:
+    name: Publish images tagged ${{ github.ref_name }}
+    needs: release
+    if: vars.ACR_NAME != ''
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Same images as a normal deploy, but tagged with the version instead of the commit,
+      # so deploy.yml can be run with image_tag = the release tag.
+      - name: Build and push
+        run: |
+          set -euo pipefail
+          az acr login --name "${{ vars.ACR_NAME }}"
+          server="$(az acr show --name "${{ vars.ACR_NAME }}" --query loginServer -o tsv)"
+          for svc in api worker frontend; do
+            image="$server/shoppulse-$svc:${{ github.ref_name }}"
+            if [ "$svc" = "frontend" ]; then
+              docker build --build-arg VITE_API_BASE_URL= -t "$image" "$svc"
+            else
+              docker build -t "$image" "$svc"
+            fi
+            docker push "$image"
+          done

@@ -1,0 +1,58 @@
+# Actions are pinned to commit SHAs, so without this file they would never be updated.
+# The commit-message prefixes exist so Dependabot's pull request titles satisfy the
+# Conventional Commits check in pr-title.yml.
+
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: pip
+    directory: /api
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+
+  - package-ecosystem: pip
+    directory: /worker
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+
+  - package-ecosystem: docker
+    directory: /api
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+
+  - package-ecosystem: docker
+    directory: /worker
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build

@@ -62,6 +62,7 @@ kubectl get svc frontend -n shoppulse
 | Terraform | `fmt -check`, `validate` without a backend, `tflint` (advisory) |
 | Manifests | `yamllint`, `kubeconform` against the Kubernetes schemas |
 | Python | `ruff check` over `api/` and `worker/` |
+| Tests | `pytest`: API endpoints through `TestClient` with fake dependencies, plus the worker's DSN parsing. No database, Redis or Service Bus required |
 | Frontend | `tsc --noEmit`, the only type gate since `vite build` skips types |
 | Dockerfiles | `hadolint` |
 | Security | `gitleaks` over the full history, `checkov` on Terraform (advisory) |
@@ -75,6 +76,9 @@ The other workflows:
 - [`drift.yml`](.github/workflows/drift.yml) re-plans nightly and opens an issue when Azure no longer matches the code.
 - [`deploy.yml`](.github/workflows/deploy.yml) is manual, authenticates with OIDC, pushes images tagged `sha-<commit>`, rolls them out, smoke tests the public URL and rolls back if anything fails.
 - [`pr-title.yml`](.github/workflows/pr-title.yml) enforces Conventional Commits on pull request titles.
+- [`release.yml`](.github/workflows/release.yml) publishes a GitHub release when a `v*` tag is pushed, and images tagged with that version once ACR exists.
+
+Dependencies and pinned action SHAs are kept current by [`dependabot.yml`](.github/dependabot.yml). Environments differ only by input file and state key: [`envs/dev.tfvars`](infra/terraform/envs/dev.tfvars) and [`envs/prod.tfvars`](infra/terraform/envs/prod.tfvars).
 
 All three Azure workflows skip themselves until the repository variables described in their header comments exist, so the pipeline stays green before any cloud setup.
 
