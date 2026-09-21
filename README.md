@@ -55,8 +55,28 @@ kubectl get svc frontend -n shoppulse
 
 ## CI/CD (GitHub Actions)
 
-- [`ci.yml`](.github/workflows/ci.yml) runs on every pull request and push to `main`: `terraform fmt`/`validate`/`tflint`, `yamllint` plus `kubeconform` on the manifests, and a Docker build of all three images with a Trivy report.
-- [`deploy.yml`](.github/workflows/deploy.yml) is manual (`workflow_dispatch`), authenticates to Azure with OIDC, pushes images tagged `sha-<commit>` and rolls them out to AKS. Required app registration, role assignments and environment variables are listed at the top of the file.
+[`ci.yml`](.github/workflows/ci.yml) runs on every pull request and push to `main`. Jobs are selected by which paths changed, so a README edit does not rebuild images:
+
+| Job | Checks |
+|-----|--------|
+| Terraform | `fmt -check`, `validate` without a backend, `tflint` (advisory) |
+| Manifests | `yamllint`, `kubeconform` against the Kubernetes schemas |
+| Python | `ruff check` over `api/` and `worker/` |
+| Frontend | `tsc --noEmit`, the only type gate since `vite build` skips types |
+| Dockerfiles | `hadolint` |
+| Security | `gitleaks` over the full history, `checkov` on Terraform (advisory) |
+| Build | Docker build per changed service, Trivy report, blocking on fixable CRITICAL |
+
+`CI OK` aggregates them into one status check — that is the one to require in branch protection.
+
+The other workflows:
+
+- [`terraform-plan.yml`](.github/workflows/terraform-plan.yml) plans against real Azure state and posts the output as a pull request comment.
+- [`drift.yml`](.github/workflows/drift.yml) re-plans nightly and opens an issue when Azure no longer matches the code.
+- [`deploy.yml`](.github/workflows/deploy.yml) is manual, authenticates with OIDC, pushes images tagged `sha-<commit>`, rolls them out, smoke tests the public URL and rolls back if anything fails.
+- [`pr-title.yml`](.github/workflows/pr-title.yml) enforces Conventional Commits on pull request titles.
+
+All three Azure workflows skip themselves until the repository variables described in their header comments exist, so the pipeline stays green before any cloud setup.
 
 Manifests use the `IMAGE_TAG` placeholder, so both the workflow and [`scripts/deploy.ps1`](scripts/deploy.ps1) deploy exactly the tag they just built.
 

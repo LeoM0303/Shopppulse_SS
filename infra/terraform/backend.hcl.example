@@ -1,0 +1,7 @@
+# Copy to backend.hcl (gitignored) or let scripts/bootstrap-state.ps1 generate it,
+# then run: terraform init -backend-config=backend.hcl
+
+resource_group_name  = "shoppulse-tfstate-rg"
+storage_account_name = "shoppulsetfstate0000"
+container_name       = "tfstate"
+key                  = "shoppulse/dev.tfstate"
