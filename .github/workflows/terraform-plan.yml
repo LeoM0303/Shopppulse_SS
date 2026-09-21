@@ -73,7 +73,7 @@ jobs:
         id: plan
         run: |
           set +e
-          terraform plan -no-color -input=false -lock=false 2>&1 | tee plan.txt
+          terraform plan -no-color -input=false -lock=false -var-file=envs/dev.tfvars 2>&1 | tee plan.txt
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           exit 0
 
