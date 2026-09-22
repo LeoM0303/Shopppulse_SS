@@ -29,3 +29,16 @@ postgres_storage_mb = 65536
 redis_sku_name = "Balanced_B1"
 acr_sku        = "Premium"
 servicebus_sku = "Standard"
+
+# Longer retention for post-incident analysis, no ingestion cap so alerts never go
+# blind mid-incident, and sampling to keep the telemetry bill predictable.
+log_retention_days               = 90
+log_daily_quota_gb               = -1
+app_insights_sampling_percentage = 30
+# alert_email = "oncall@example.com"
+
+# Zone-redundant snapshots, and a full year in the archive tier before deletion.
+storage_replication_type           = "ZRS"
+storage_tier_to_cool_after_days    = 30
+storage_tier_to_archive_after_days = 90
+storage_delete_after_days          = 730

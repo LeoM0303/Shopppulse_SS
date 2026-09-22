@@ -43,6 +43,11 @@ spec:
                 secretKeyRef:
                   name: shoppulse-secrets
                   key: SERVICE_BUS_CONNECTION_STRING
+            - name: APPLICATIONINSIGHTS_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: shoppulse-secrets
+                  key: APPLICATIONINSIGHTS_CONNECTION_STRING
           readinessProbe:
             httpGet:
               path: /healthz

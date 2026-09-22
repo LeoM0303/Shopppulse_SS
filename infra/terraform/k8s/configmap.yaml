@@ -6,3 +6,9 @@ metadata:
 data:
   SERVICE_BUS_QUEUE_NAME: "sales-events"
   CORS_ORIGINS: "*"
+  # Placeholders are deliberately unlike the key names: the renderer is a plain
+  # sed, so a token equal to its own key would rewrite the key as well.
+  # An empty URL disables snapshots, which is what docker-compose wants.
+  REPORTS_STORAGE_ACCOUNT_URL: "REPORTS_URL_VALUE"
+  REPORTS_CONTAINER: "REPORTS_CONTAINER_VALUE"
+  REPORTS_MIN_INTERVAL_SECONDS: "900"

@@ -13,8 +13,12 @@ from dotenv import load_dotenv
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from .processor import recompute_summary
+from .reports import writer_from_env
+from .telemetry import configure_telemetry
 
 load_dotenv()
+
+configure_telemetry("shoppulse-worker")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -62,7 +66,18 @@ async def run_health_server():
     logger.info("Health server started on :8001")
 
 
-async def run_worker(pool: asyncpg.Pool, redis: aioredis.Redis):
+async def archive_summary(snapshots, summary: dict) -> None:
+    """Storage is a side channel: a failed upload must not cost us the message."""
+    try:
+        name = await snapshots.write_if_due(summary)
+        if name:
+            logger.info("Report snapshot stored as %s", name)
+    except Exception:
+        logger.exception("Could not store the report snapshot")
+
+
+async def run_worker(pool: asyncpg.Pool, redis: aioredis.Redis, snapshots=None):
+    snapshots = snapshots or writer_from_env()
     retry_delay = 5
     while True:
         try:
@@ -84,6 +99,7 @@ async def run_worker(pool: asyncpg.Pool, redis: aioredis.Redis):
                                 summary = await recompute_summary(pool)
                                 await redis.set(REDIS_KEY, json.dumps(summary), ex=REDIS_TTL)
                                 logger.info("Dashboard summary recomputed and cached")
+                                await archive_summary(snapshots, summary)
                             except Exception:
                                 logger.exception("Error processing message; abandoning")
                                 try:

@@ -42,6 +42,10 @@ provider "azurerm" {
 
   # null → ARM_SUBSCRIPTION_ID / az CLI default
   subscription_id = var.subscription_id
+
+  # The report storage account has shared keys disabled, so blob data plane calls
+  # (creating containers) have to authenticate as the caller instead of a key.
+  storage_use_azuread = true
 }
 
 provider "kubernetes" {

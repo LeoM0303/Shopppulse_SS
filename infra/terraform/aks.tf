@@ -42,6 +42,8 @@ module "aks" {
   workload_node_min     = var.workload_node_min_count
   workload_node_max     = var.workload_node_max_count
 
+  log_analytics_workspace_id = try(module.monitoring[0].workspace_id, null)
+
   depends_on = [
     azurerm_role_assignment.aks_identity_operator,
     azurerm_role_assignment.kubelet_network_contributor,

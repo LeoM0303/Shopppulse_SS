@@ -27,10 +27,23 @@ locals {
   postgres_subnet_id          = var.create_network ? module.network[0].postgres_subnet_id : data.azurerm_subnet.postgres[0].id
   private_endpoints_subnet_id = var.create_network ? module.network[0].private_endpoints_subnet_id : data.azurerm_subnet.private_endpoints[0].id
 
+  needs_deployer_ip = (
+    (var.key_vault_public_network_access_enabled && length(var.key_vault_deployer_ip_cidrs) == 0) ||
+    (var.enable_storage && var.storage_public_network_access_enabled && length(var.storage_deployer_ip_cidrs) == 0)
+  )
+
+  detected_ip_cidrs = length(data.http.deployer_ip) > 0 ? ["${chomp(data.http.deployer_ip[0].response_body)}/32"] : []
+
   deployer_ip_cidrs = (
     !var.key_vault_public_network_access_enabled ? [] :
     length(var.key_vault_deployer_ip_cidrs) > 0 ? var.key_vault_deployer_ip_cidrs :
-    ["${chomp(data.http.deployer_ip[0].response_body)}/32"]
+    local.detected_ip_cidrs
+  )
+
+  storage_ip_cidrs = (
+    !var.storage_public_network_access_enabled ? [] :
+    length(var.storage_deployer_ip_cidrs) > 0 ? var.storage_deployer_ip_cidrs :
+    local.detected_ip_cidrs
   )
 
   identity_principal_ids = var.enable_aks ? {
@@ -51,6 +64,29 @@ locals {
     var.enable_servicebus ? {
       "servicebus-connection-string" = module.servicebus[0].primary_connection_string
       "servicebus-queue-name"        = var.servicebus_queue_names[0]
+    } : {},
+    var.enable_monitoring ? {
+      "appinsights-connection-string" = module.monitoring[0].app_insights_connection_string
+    } : {}
+  )
+
+  # Platform logs and metrics all land in the shared workspace. Redis Enterprise
+  # exposes metrics but no log categories, so it is listed as metrics-only.
+  diagnostic_target_ids = merge(
+    {
+      postgres = module.postgresql.server_id
+      keyvault = module.keyvault.key_vault_id
+      acr      = module.acr.id
+      redis    = module.redis.id
+    },
+    var.enable_aks ? {
+      aks = module.aks[0].cluster_id
+    } : {},
+    var.enable_servicebus ? {
+      servicebus = module.servicebus[0].namespace_id
+    } : {},
+    var.enable_storage ? {
+      storage_blob = "${module.storage[0].account_id}/blobServices/default"
     } : {}
   )
 }
@@ -58,6 +94,6 @@ locals {
 data "azurerm_client_config" "deployer" {}
 
 data "http" "deployer_ip" {
-  count = var.key_vault_public_network_access_enabled && length(var.key_vault_deployer_ip_cidrs) == 0 ? 1 : 0
+  count = local.needs_deployer_ip ? 1 : 0
   url   = "https://api.ipify.org"
 }

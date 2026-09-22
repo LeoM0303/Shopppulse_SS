@@ -68,6 +68,26 @@ output "acr_name" {
   value       = module.acr.name
 }
 
+output "log_analytics_workspace_name" {
+  description = "Log Analytics workspace that holds platform, container and application telemetry (null when enable_monitoring=false)"
+  value       = try(module.monitoring[0].workspace_name, null)
+}
+
+output "app_insights_name" {
+  description = "Application Insights component name (null when enable_monitoring=false)"
+  value       = try(module.monitoring[0].app_insights_name, null)
+}
+
+output "reports_storage_account_url" {
+  description = "Blob endpoint the application uses for report snapshots (null when enable_storage=false)"
+  value       = try(module.storage[0].blob_endpoint, null)
+}
+
+output "reports_container_name" {
+  description = "Container that holds report snapshots (null when enable_storage=false)"
+  value       = var.enable_storage ? var.reports_container_name : null
+}
+
 output "get_aks_credentials_command" {
   description = "CLI command to configure kubectl (empty when enable_aks=false)"
   value = var.enable_aks ? (

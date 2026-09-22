@@ -49,6 +49,18 @@ variable "enable_servicebus" {
   default     = true
 }
 
+variable "enable_monitoring" {
+  description = "true = Log Analytics, Container Insights, Application Insights, alerts and diagnostic settings."
+  type        = bool
+  default     = true
+}
+
+variable "enable_storage" {
+  description = "true = blob account for report snapshots with a lifecycle policy. false = skip storage."
+  type        = bool
+  default     = true
+}
+
 # --- Existing network (create_network=false) ---
 
 variable "resource_group_name" {
@@ -209,6 +221,77 @@ variable "key_vault_deployer_ip_cidrs" {
   description = "Optional override. Empty = auto-detect public IP via api.ipify.org when public KV access is enabled."
   type        = list(string)
   default     = []
+}
+
+# --- Monitoring ---
+
+variable "log_retention_days" {
+  description = "Log Analytics retention in days (30 is the free minimum)"
+  type        = number
+  default     = 30
+}
+
+variable "log_daily_quota_gb" {
+  description = "Ingestion cap in GB per day, which keeps a log storm from becoming a bill. -1 removes the cap."
+  type        = number
+  default     = 1
+}
+
+variable "app_insights_sampling_percentage" {
+  description = "Share of application telemetry that is kept"
+  type        = number
+  default     = 100
+}
+
+variable "alert_email" {
+  description = "Address that receives alerts. null = action group with no receivers."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+# --- Report storage ---
+
+variable "storage_replication_type" {
+  description = "LRS for dev, ZRS or GZRS when snapshots must survive a zone or region failure"
+  type        = string
+  default     = "LRS"
+}
+
+variable "reports_container_name" {
+  description = "Blob container that holds dashboard snapshots"
+  type        = string
+  default     = "reports"
+}
+
+variable "storage_public_network_access_enabled" {
+  description = "Temporarily true when applying from outside the VNet, because containers are created over the blob data plane."
+  type        = bool
+  default     = false
+}
+
+variable "storage_deployer_ip_cidrs" {
+  description = "Optional override. Empty = auto-detect the public IP while storage public access is enabled."
+  type        = list(string)
+  default     = []
+}
+
+variable "storage_tier_to_cool_after_days" {
+  description = "Days after the last write before a snapshot moves to the cool tier"
+  type        = number
+  default     = 30
+}
+
+variable "storage_tier_to_archive_after_days" {
+  description = "Days after the last write before a snapshot moves to the archive tier"
+  type        = number
+  default     = 90
+}
+
+variable "storage_delete_after_days" {
+  description = "Days after the last write before a snapshot is deleted"
+  type        = number
+  default     = 365
 }
 
 # --- Kubernetes ---
