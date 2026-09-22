@@ -46,6 +46,9 @@ locals {
     local.detected_ip_cidrs
   )
 
+  # Ingress lives in the cluster, so it is only meaningful when there is one.
+  ingress_enabled = var.enable_aks && var.enable_ingress
+
   identity_principal_ids = var.enable_aks ? {
     worker = module.identity[0].worker_identity.principal_id
     api    = module.identity[0].api_identity.principal_id
@@ -87,6 +90,11 @@ locals {
     } : {},
     var.enable_storage ? {
       storage_blob = "${module.storage[0].account_id}/blobServices/default"
+    } : {},
+    var.create_network ? {
+      nsg_aks      = module.network[0].network_security_group_ids.aks
+      nsg_postgres = module.network[0].network_security_group_ids.postgres
+      nsg_pe       = module.network[0].network_security_group_ids.private_endpoints
     } : {}
   )
 }

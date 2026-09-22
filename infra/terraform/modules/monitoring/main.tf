@@ -52,8 +52,14 @@ resource "azurerm_monitor_diagnostic_setting" "this" {
     }
   }
 
-  enabled_metric {
-    category = "AllMetrics"
+  # Network security groups emit rule counters and events but no metrics at all,
+  # and a diagnostic setting that asks for metrics they do not have is rejected.
+  dynamic "enabled_metric" {
+    for_each = contains(var.logs_only_targets, each.key) ? [] : [1]
+
+    content {
+      category = "AllMetrics"
+    }
   }
 }
 

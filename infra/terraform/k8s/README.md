@@ -31,26 +31,31 @@ Options:
 1. Applies ACR via Terraform (unless `-SkipTerraform`)
 2. Builds & pushes `shoppulse-api`, `shoppulse-worker`, `shoppulse-frontend` to ACR
 3. Syncs secrets from Key Vault → Kubernetes Secret `shoppulse-secrets`
-4. Applies manifests from `infra/terraform/k8s/`
-5. Prints frontend LoadBalancer URL
+4. Runs `db-migrate-<tag>`, a Job that applies `alembic upgrade head`, and stops if it fails
+5. Applies the remaining manifests from `infra/terraform/k8s/`
+6. Prints the ingress URL
 
 ## Access in browser
 
-LoadBalancer IP changes after cluster recreate / stop-start — do not hardcode it. After deploy:
+The ingress controller's IP changes after a cluster recreate or stop-start — do not hardcode it. After deploy:
 
 ```powershell
-kubectl get svc frontend -n shoppulse -o jsonpath='http://{.status.loadBalancer.ingress[0].ip}{"\n"}'
+$ip = kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+curl -k --resolve shoppulse.local:443:$ip https://shoppulse.local/api/dashboard
 ```
 
-Open that URL in the browser; dashboard is at `/dashboard`. `deploy.ps1` also prints the frontend URL when the IP is ready.
+The host has no public DNS and the certificate is self-signed, so a browser needs `$ip shoppulse.local` in the hosts file and one click through the certificate warning. The dashboard is at `/dashboard`. `deploy.ps1` prints the URL and the IP when they are ready.
 
 ## Architecture in cluster
 
 ```
-Internet → frontend (LoadBalancer:80)
-              └─ nginx /api/* → api:8000
+Internet → ingress-nginx (LoadBalancer:80/443, TLS, 80 redirects to 443)
+              ├─ /api  → api:8000
+              └─ /     → frontend:80 (ClusterIP)
+db-migrate Job (alembic upgrade head) runs before any rollout
 worker ← KEDA ScaledObject ← Service Bus queue sales-events
 api/worker → PostgreSQL, Redis, Service Bus (secrets from Key Vault)
+worker → blob storage (report snapshots, workload identity)
 ```
 
 ## Useful commands
@@ -58,7 +63,8 @@ api/worker → PostgreSQL, Redis, Service Bus (secrets from Key Vault)
 ```powershell
 kubectl get pods -n shoppulse
 kubectl logs -n shoppulse deployment/api -f
-kubectl get svc frontend -n shoppulse
+kubectl get ingress -n shoppulse
+kubectl get jobs -n shoppulse
 kubectl get scaledobject -n shoppulse
 ```
 

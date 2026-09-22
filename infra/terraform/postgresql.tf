@@ -23,4 +23,8 @@ module "postgresql" {
   database_name  = var.postgres_database_name
   sku_name       = var.postgres_sku_name
   storage_mb     = var.postgres_storage_mb
+
+  backup_retention_days        = var.postgres_backup_retention_days
+  geo_redundant_backup_enabled = var.postgres_geo_redundant_backup_enabled
+  high_availability_enabled    = var.postgres_high_availability_enabled
 }

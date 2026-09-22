@@ -23,7 +23,7 @@
 #      AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
 #      AZURE_RESOURCE_GROUP, AKS_CLUSTER_NAME, ACR_NAME, KEY_VAULT_NAME, SERVICEBUS_NAMESPACE
 #    Optional, from the terraform outputs of the same environment:
-#      REPORTS_STORAGE_ACCOUNT_URL, REPORTS_CONTAINER
+#      REPORTS_STORAGE_ACCOUNT_URL, REPORTS_CONTAINER, INGRESS_HOSTNAME
 #    Add required reviewers on prod to gate the deployment.
 #
 # Network prerequisite
@@ -72,6 +72,7 @@ jobs:
       # Empty when the environment runs without the storage module.
       REPORTS_STORAGE_ACCOUNT_URL: ${{ vars.REPORTS_STORAGE_ACCOUNT_URL }}
       REPORTS_CONTAINER: ${{ vars.REPORTS_CONTAINER }}
+      INGRESS_HOSTNAME: ${{ vars.INGRESS_HOSTNAME || 'shoppulse.local' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -167,7 +168,7 @@ jobs:
             --from-literal=APPLICATIONINSIGHTS_CONNECTION_STRING="$APPINSIGHTS" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Render and apply manifests
+      - name: Render manifests
         run: |
           set -euo pipefail
           mkdir -p build/k8s
@@ -179,8 +180,30 @@ jobs:
                 -e "s|IMAGE_TAG|$IMAGE_TAG|g" \
                 -e "s|REPORTS_URL_VALUE|${REPORTS_STORAGE_ACCOUNT_URL:-}|g" \
                 -e "s|REPORTS_CONTAINER_VALUE|${REPORTS_CONTAINER:-reports}|g" \
+                -e "s|INGRESS_HOSTNAME|$INGRESS_HOSTNAME|g" \
                 "$file" > "build/k8s/$name"
           done
+
+      # Schema first: a rollout against a database that has not been migrated is
+      # the one failure a rollback cannot fix.
+      - name: Run database migrations
+        run: |
+          set -euo pipefail
+          job="db-migrate-$IMAGE_TAG"
+          kubectl delete job "$job" --namespace "$NAMESPACE" --ignore-not-found
+          kubectl apply -f build/k8s/migrate-job.yaml
+          if ! kubectl wait --for=condition=complete "job/$job" --namespace "$NAMESPACE" --timeout=10m; then
+            echo "Migration job did not complete:"
+            kubectl logs "job/$job" --namespace "$NAMESPACE" --tail=200 || true
+            kubectl describe "job/$job" --namespace "$NAMESPACE" || true
+            exit 1
+          fi
+          kubectl logs "job/$job" --namespace "$NAMESPACE" --tail=50
+
+      - name: Apply manifests
+        run: |
+          set -euo pipefail
+          rm build/k8s/migrate-job.yaml
           kubectl apply -f build/k8s/
           # From here on a failure leaves running workloads behind, so rollback applies.
           echo "APPLIED=true" >> "$GITHUB_ENV"
@@ -194,21 +217,36 @@ jobs:
       - name: Smoke test
         run: |
           set -euo pipefail
+          # The ingress controller owns the only public address now.
           for _ in $(seq 1 30); do
-            IP="$(kubectl get svc frontend -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+            IP="$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
             [ -n "$IP" ] && break
             sleep 10
           done
           if [ -z "$IP" ]; then
-            echo "frontend service never got an external IP"
+            echo "ingress controller never got an external IP"
             exit 1
           fi
-          echo "APP_URL=http://$IP" >> "$GITHUB_ENV"
+          echo "APP_URL=https://$INGRESS_HOSTNAME" >> "$GITHUB_ENV"
 
+          # --resolve because the host has no public DNS, -k because the dev
+          # certificate is self-signed. Both go away with a real domain.
+          probe() {
+            curl -fsSk --resolve "$INGRESS_HOSTNAME:443:$IP" \
+              --retry 12 --retry-delay 5 --retry-all-errors --max-time 20 "$1" > /dev/null
+          }
           # The SPA proves nginx serves, /api/dashboard proves api, Postgres and Redis answer.
-          curl -fsS --retry 12 --retry-delay 5 --retry-all-errors --max-time 20 "http://$IP/" > /dev/null
-          curl -fsS --retry 12 --retry-delay 5 --retry-all-errors --max-time 20 "http://$IP/api/dashboard" > /dev/null
-          echo "Smoke test passed against http://$IP"
+          probe "https://$INGRESS_HOSTNAME/"
+          probe "https://$INGRESS_HOSTNAME/api/dashboard"
+
+          # HTTP must not serve the app, only redirect to HTTPS.
+          code="$(curl -so /dev/null -w '%{http_code}' --resolve "$INGRESS_HOSTNAME:80:$IP" "http://$INGRESS_HOSTNAME/")"
+          case "$code" in
+            301|302|307|308) ;;
+            *) echo "expected an HTTPS redirect on port 80, got $code"; exit 1 ;;
+          esac
+
+          echo "Smoke test passed against https://$INGRESS_HOSTNAME ($IP)"
 
       - name: Roll back
         if: failure() && env.APPLIED == 'true'
@@ -248,6 +286,7 @@ jobs:
             echo ""
             echo '```'
             kubectl get pods --namespace "$NAMESPACE" 2>&1 || true
-            kubectl get svc frontend --namespace "$NAMESPACE" 2>&1 || true
+            kubectl get ingress --namespace "$NAMESPACE" 2>&1 || true
+            kubectl get svc ingress-nginx-controller -n ingress-nginx 2>&1 || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

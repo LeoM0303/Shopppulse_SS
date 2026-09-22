@@ -21,6 +21,7 @@ infra/terraform/
 ├── servicebus.tf
 ├── acr.tf
 ├── aks.tf
+├── ingress.tf
 ├── monitoring.tf
 ├── storage.tf
 ├── secrets.tf
@@ -47,6 +48,7 @@ infra/terraform/
 | **Existing VNet** | `create_network=false` | Reuses RG/VNet/subnets via `data` sources |
 | **No telemetry** | `enable_monitoring=false` | Skips the workspace, Container Insights, App Insights and alerts |
 | **No object storage** | `enable_storage=false` | Skips the blob account, so `/api/reports` stays disabled |
+| **No ingress** | `enable_ingress=false` | Skips ingress-nginx and the TLS secret; nothing is published |
 
 ## Prerequisites
 
@@ -107,6 +109,26 @@ terraform apply -refresh=false `
 
 1. Ensure RG + VNet exist with subnets `postgres` (delegated) and `private-endpoints`.
 2. Apply with `create_network=false` (and subnet name overrides if needed).
+
+## Network security groups
+
+Each subnet carries an NSG that ends in an explicit deny:
+
+| Subnet | Allowed inbound |
+|--------|-----------------|
+| `aks` | 80/443 from Internet, `AzureLoadBalancer` probes, VNet-to-VNet |
+| `postgres` | 5432 from the `aks` prefix |
+| `private-endpoints` | 443, 5671, 5672, 10000 from the `aks` prefix |
+
+The private endpoint subnet sets `private_endpoint_network_policies = "NetworkSecurityGroupEnabled"`, without which private endpoints ignore the NSG entirely. Outbound stays at the Azure default — restricting it correctly needs a route table and Azure Firewall, and a half-done version breaks node bootstrap.
+
+AKS keeps a second NSG on the node network interfaces and manages LoadBalancer rules there. Traffic must be allowed by both, so a rule missing here presents as a hang rather than a refusal.
+
+## Ingress
+
+`ingress.tf` installs ingress-nginx from a pinned chart, generates a self-signed certificate with the `tls` provider, and writes it to the `shoppulse-tls` secret in the application namespace. The `k8s/ingress.yaml` manifest references that secret and routes `/api` and `/`.
+
+With a real domain, replace the `tls_*` resources with cert-manager and an ACME issuer and set `ingress_hostname`; the Ingress refers to the secret by name, so nothing else changes.
 
 ## Redis note
 
