@@ -53,6 +53,29 @@ Kubernetes manifests: [infra/terraform/k8s/README.md](infra/terraform/k8s/README
 kubectl get svc frontend -n shoppulse
 ```
 
+## Observability
+
+One Log Analytics workspace per environment collects everything:
+
+- **Platform** — a diagnostic setting on AKS, PostgreSQL, Key Vault, ACR, Service Bus, Redis and the blob service ships `allLogs` and `AllMetrics`.
+- **Containers** — the Container Insights addon, authenticated with managed identity rather than a workspace key.
+- **Application** — Application Insights, fed by `azure-monitor-opentelemetry` in the API and the worker. No connection string in the environment means the app runs uninstrumented, which is what docker-compose and CI want.
+
+Alerts go through one action group (`alert_email` to add a receiver): node CPU and memory, PostgreSQL CPU and storage, pods restarting more than three times in 30 minutes, and more than 20 error log lines in 15 minutes. Dev caps ingestion at 1 GB/day, because on a student subscription a log storm is a billing incident; prod removes the cap and samples telemetry instead.
+
+Queries for the usual questions are in [`docs/runbooks/incident-response.md`](docs/runbooks/incident-response.md).
+
+## Report snapshots
+
+The worker writes the dashboard summary to a private blob container after each recompute, at most once every 15 minutes, keyed by day (`2026-09-21/summary-160509.json`). `GET /api/reports` lists them. The worker identity holds Storage Blob Data Contributor, the API identity only Reader, and the account has shared key access disabled — so there is no key to leak and the read path cannot corrupt the archive. A lifecycle policy tiers snapshots to cool, then archive, then deletes them, with short steps in dev so the policy can be watched working.
+
+A failed upload is logged and dropped: storage is a side channel and must never cost us a queue message.
+
+## Decisions and runbooks
+
+- [`docs/adr/`](docs/adr/README.md) — why the Terraform root is single, why the data plane is private, why Workload Identity, why Azure Monitor.
+- [`docs/runbooks/incident-response.md`](docs/runbooks/incident-response.md) — severity levels, the first five minutes, KQL queries, rollback, database restore.
+
 ## CI/CD (GitHub Actions)
 
 [`ci.yml`](.github/workflows/ci.yml) runs on every pull request and push to `main`. Jobs are selected by which paths changed, so a README edit does not rebuild images:
@@ -95,6 +118,9 @@ Manifests use the `IMAGE_TAG` placeholder, so both the workflow and [`scripts/de
 | `SERVICE_BUS_CONNECTION_STRING` | Azure Service Bus namespace connection string | — |
 | `SERVICE_BUS_QUEUE_NAME` | Queue name | `sales-events` |
 | `CORS_ORIGINS` | Comma-separated allowed origins | `*` |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Enables tracing when set | `""` (uninstrumented) |
+| `REPORTS_STORAGE_ACCOUNT_URL` | Blob endpoint for snapshots. Empty disables `/api/reports` | `""` |
+| `REPORTS_CONTAINER` | Container holding snapshots | `reports` |
 
 ### Worker (`worker/`)
 
@@ -104,6 +130,10 @@ Manifests use the `IMAGE_TAG` placeholder, so both the workflow and [`scripts/de
 | `REDIS_URL` | Redis connection string | `redis://localhost:6379/0` |
 | `SERVICE_BUS_CONNECTION_STRING` | Azure Service Bus namespace connection string | — |
 | `SERVICE_BUS_QUEUE_NAME` | Queue name | `sales-events` |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Enables tracing when set | `""` (uninstrumented) |
+| `REPORTS_STORAGE_ACCOUNT_URL` | Blob endpoint for snapshots. Empty disables snapshot writes | `""` |
+| `REPORTS_CONTAINER` | Container holding snapshots | `reports` |
+| `REPORTS_MIN_INTERVAL_SECONDS` | Minimum gap between snapshot writes | `900` |
 
 ### Frontend (`frontend/`)
 

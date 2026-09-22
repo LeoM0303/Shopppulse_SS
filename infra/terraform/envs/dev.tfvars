@@ -23,3 +23,16 @@ postgres_sku_name = "B_Standard_B1ms"
 redis_sku_name    = "Balanced_B0"
 acr_sku           = "Premium"
 servicebus_sku    = "Standard"
+
+# Observability. The daily cap matters more than retention on a student subscription:
+# ingestion is what costs money, and 1 GB/day is far more than this stack produces.
+log_retention_days = 30
+log_daily_quota_gb = 1
+# alert_email = "you@example.com"
+
+# Report snapshots. LRS is enough for dev, and the tiering steps are short so the
+# lifecycle policy can actually be observed instead of taking a year to do anything.
+storage_replication_type           = "LRS"
+storage_tier_to_cool_after_days    = 7
+storage_tier_to_archive_after_days = 30
+storage_delete_after_days          = 90

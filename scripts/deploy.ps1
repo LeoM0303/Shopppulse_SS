@@ -38,6 +38,17 @@ function Get-TfOutputJson($name) {
     finally { Pop-Location }
 }
 
+# Outputs that are null when the matching module is disabled.
+function Get-TfOutputOrEmpty($name) {
+    Push-Location $TfDir
+    try {
+        $value = terraform output -raw $name 2>$null
+        if ($LASTEXITCODE -ne 0 -or $value -eq "null") { return "" }
+        return $value
+    }
+    finally { Pop-Location }
+}
+
 Write-Host "==> ShopPulse deploy (tag: $ImageTag)" -ForegroundColor Cyan
 
 # --- Terraform: ACR (if not skipped) ---
@@ -54,6 +65,9 @@ $KeyVault = Get-TfOutput "key_vault_name"
 $SbNamespace = Get-TfOutput "servicebus_namespace"
 $Rg = Get-TfOutput "resource_group_name"
 $Aks = Get-TfOutput "aks_cluster_name"
+$ReportsUrl = Get-TfOutputOrEmpty "reports_storage_account_url"
+$ReportsContainer = Get-TfOutputOrEmpty "reports_container_name"
+if (-not $ReportsContainer) { $ReportsContainer = "reports" }
 
 Write-Host "ACR: $AcrServer"
 Write-Host "Key Vault: $KeyVault"
@@ -89,6 +103,10 @@ if (-not $DatabaseUrl -or -not $RedisUrl -or -not $SbConn) {
     throw "Failed to read secrets from Key Vault $KeyVault"
 }
 
+# Absent when the environment was applied with enable_monitoring=false.
+$AppInsights = az keyvault secret show --vault-name $KeyVault --name appinsights-connection-string --query value -o tsv 2>$null
+if ($LASTEXITCODE -ne 0) { $AppInsights = "" }
+
 # --- Render manifests ---
 if (Test-Path $BuildDir) { Remove-Item $BuildDir -Recurse -Force }
 New-Item -ItemType Directory -Path $BuildDir | Out-Null
@@ -98,6 +116,8 @@ Get-ChildItem $K8sDir -Filter "*.yaml" | ForEach-Object {
     $content = $content.Replace("ACR_LOGIN_SERVER", $AcrServer)
     $content = $content.Replace("SERVICEBUS_NAMESPACE", $SbNamespace)
     $content = $content.Replace("IMAGE_TAG", $ImageTag)
+    $content = $content.Replace("REPORTS_URL_VALUE", $ReportsUrl)
+    $content = $content.Replace("REPORTS_CONTAINER_VALUE", $ReportsContainer)
     Set-Content -Path (Join-Path $BuildDir $_.Name) -Value $content -NoNewline
 }
 
@@ -109,6 +129,7 @@ kubectl create secret generic shoppulse-secrets `
     --from-literal=DATABASE_URL="$DatabaseUrl" `
     --from-literal=REDIS_URL="$RedisUrl" `
     --from-literal=SERVICE_BUS_CONNECTION_STRING="$SbConn" `
+    --from-literal=APPLICATIONINSIGHTS_CONNECTION_STRING="$AppInsights" `
     --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl rollout restart deployment/api deployment/worker -n shoppulse

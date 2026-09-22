@@ -55,6 +55,16 @@ resource "azurerm_kubernetes_cluster" "this" {
     keda_enabled = true
   }
 
+  # Container Insights. Managed identity auth avoids storing a workspace key.
+  dynamic "oms_agent" {
+    for_each = var.log_analytics_workspace_id == null ? [] : [var.log_analytics_workspace_id]
+
+    content {
+      log_analytics_workspace_id      = oms_agent.value
+      msi_auth_for_monitoring_enabled = true
+    }
+  }
+
   azure_active_directory_role_based_access_control {
     tenant_id          = data.azurerm_client_config.current.tenant_id
     azure_rbac_enabled = true

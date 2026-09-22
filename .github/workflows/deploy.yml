@@ -22,6 +22,8 @@
 # 3. GitHub environment (Settings > Environments) named dev and/or prod, with variables:
 #      AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
 #      AZURE_RESOURCE_GROUP, AKS_CLUSTER_NAME, ACR_NAME, KEY_VAULT_NAME, SERVICEBUS_NAMESPACE
+#    Optional, from the terraform outputs of the same environment:
+#      REPORTS_STORAGE_ACCOUNT_URL, REPORTS_CONTAINER
 #    Add required reviewers on prod to gate the deployment.
 #
 # Network prerequisite
@@ -67,6 +69,9 @@ jobs:
       ACR_NAME: ${{ vars.ACR_NAME }}
       KEY_VAULT: ${{ vars.KEY_VAULT_NAME }}
       SERVICEBUS_NAMESPACE: ${{ vars.SERVICEBUS_NAMESPACE }}
+      # Empty when the environment runs without the storage module.
+      REPORTS_STORAGE_ACCOUNT_URL: ${{ vars.REPORTS_STORAGE_ACCOUNT_URL }}
+      REPORTS_CONTAINER: ${{ vars.REPORTS_CONTAINER }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -147,8 +152,10 @@ jobs:
           DATABASE_URL="$(read_secret database-url | sed 's/sslmode=require/ssl=require/')"
           REDIS_URL="$(read_secret redis-url)"
           SB_CONNECTION="$(read_secret servicebus-connection-string)"
-          for value in "$DATABASE_URL" "$REDIS_URL" "$SB_CONNECTION"; do
-            echo "::add-mask::$value"
+          # Absent when the environment was applied with enable_monitoring=false.
+          APPINSIGHTS="$(read_secret appinsights-connection-string 2>/dev/null || echo '')"
+          for value in "$DATABASE_URL" "$REDIS_URL" "$SB_CONNECTION" "$APPINSIGHTS"; do
+            [ -n "$value" ] && echo "::add-mask::$value"
           done
 
           kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
@@ -157,6 +164,7 @@ jobs:
             --from-literal=DATABASE_URL="$DATABASE_URL" \
             --from-literal=REDIS_URL="$REDIS_URL" \
             --from-literal=SERVICE_BUS_CONNECTION_STRING="$SB_CONNECTION" \
+            --from-literal=APPLICATIONINSIGHTS_CONNECTION_STRING="$APPINSIGHTS" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Render and apply manifests
@@ -169,6 +177,8 @@ jobs:
             sed -e "s|ACR_LOGIN_SERVER|$ACR_LOGIN_SERVER|g" \
                 -e "s|SERVICEBUS_NAMESPACE|$SERVICEBUS_NAMESPACE|g" \
                 -e "s|IMAGE_TAG|$IMAGE_TAG|g" \
+                -e "s|REPORTS_URL_VALUE|${REPORTS_STORAGE_ACCOUNT_URL:-}|g" \
+                -e "s|REPORTS_CONTAINER_VALUE|${REPORTS_CONTAINER:-reports}|g" \
                 "$file" > "build/k8s/$name"
           done
           kubectl apply -f build/k8s/

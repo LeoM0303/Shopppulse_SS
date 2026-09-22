@@ -8,11 +8,15 @@ from fastapi.middleware.cors import CORSMiddleware
 # which read os.environ at module level.
 from .database import engine
 from .models import Base
-from .routers import dashboard, events
+from .routers import dashboard, events, reports
+from .telemetry import configure_telemetry, instrument_app
 
 load_dotenv()
 
+configure_telemetry("shoppulse-api")
+
 app = FastAPI(title="ShopPulse API")
+instrument_app(app)
 
 cors_origins_raw = os.environ.get("CORS_ORIGINS", "*")
 cors_origins = [o.strip() for o in cors_origins_raw.split(",")] if cors_origins_raw != "*" else ["*"]
@@ -38,3 +42,4 @@ async def healthz():
 
 app.include_router(events.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")

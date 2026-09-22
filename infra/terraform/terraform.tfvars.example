@@ -17,6 +17,8 @@ tags = {
 # create_network    = true
 # enable_aks        = true
 # enable_servicebus = true
+# enable_monitoring = true
+# enable_storage    = true
 
 # --- Data-layer only example ---
 # enable_aks        = false
@@ -53,3 +55,13 @@ api_service_account_name    = "api"
 # Pushing images from a laptop or a GitHub-hosted runner: set true, then re-apply with false
 # acr_public_network_access_enabled = true
 # acr_allowed_ip_cidrs              = ["203.0.113.10/32"]
+
+# Blob containers are created over the data plane, so the first apply from outside the
+# VNet needs public access on. Re-apply with false afterwards.
+# storage_public_network_access_enabled = true
+# storage_deployer_ip_cidrs             = ["203.0.113.10/32"]
+
+# Monitoring
+# log_retention_days = 30
+# log_daily_quota_gb = 1
+# alert_email        = "you@example.com"

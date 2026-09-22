@@ -76,3 +76,10 @@ variable "pod_cidr" {
   type        = string
   default     = "10.244.0.0/16"
 }
+
+variable "log_analytics_workspace_id" {
+  description = "Workspace for Container Insights. null = do not install the monitoring addon."
+  type        = string
+  default     = null
+  nullable    = true
+}
