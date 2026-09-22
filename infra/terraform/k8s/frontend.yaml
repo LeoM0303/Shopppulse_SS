@@ -36,7 +36,8 @@ metadata:
   name: frontend
   namespace: shoppulse
 spec:
-  type: LoadBalancer
+  # ClusterIP, not LoadBalancer: the ingress controller is the only public address.
+  type: ClusterIP
   selector:
     app: frontend
   ports:

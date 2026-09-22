@@ -68,6 +68,8 @@ $Aks = Get-TfOutput "aks_cluster_name"
 $ReportsUrl = Get-TfOutputOrEmpty "reports_storage_account_url"
 $ReportsContainer = Get-TfOutputOrEmpty "reports_container_name"
 if (-not $ReportsContainer) { $ReportsContainer = "reports" }
+$IngressHost = Get-TfOutputOrEmpty "ingress_hostname"
+if (-not $IngressHost) { $IngressHost = "shoppulse.local" }
 
 Write-Host "ACR: $AcrServer"
 Write-Host "Key Vault: $KeyVault"
@@ -118,6 +120,7 @@ Get-ChildItem $K8sDir -Filter "*.yaml" | ForEach-Object {
     $content = $content.Replace("IMAGE_TAG", $ImageTag)
     $content = $content.Replace("REPORTS_URL_VALUE", $ReportsUrl)
     $content = $content.Replace("REPORTS_CONTAINER_VALUE", $ReportsContainer)
+    $content = $content.Replace("INGRESS_HOSTNAME", $IngressHost)
     Set-Content -Path (Join-Path $BuildDir $_.Name) -Value $content -NoNewline
 }
 
@@ -132,30 +135,45 @@ kubectl create secret generic shoppulse-secrets `
     --from-literal=APPLICATIONINSIGHTS_CONNECTION_STRING="$AppInsights" `
     --dry-run=client -o yaml | kubectl apply -f -
 
+# --- Migrate the database before anything rolls out ---
+Write-Host "==> Running database migrations..." -ForegroundColor Yellow
+$MigrateJob = "db-migrate-$ImageTag"
+kubectl delete job $MigrateJob -n shoppulse --ignore-not-found
+kubectl apply -f (Join-Path $BuildDir "migrate-job.yaml")
+kubectl wait --for=condition=complete "job/$MigrateJob" -n shoppulse --timeout=10m
+if ($LASTEXITCODE -ne 0) {
+    kubectl logs "job/$MigrateJob" -n shoppulse --tail=200
+    throw "Migration job $MigrateJob did not complete"
+}
+kubectl logs "job/$MigrateJob" -n shoppulse --tail=50
+
 kubectl rollout restart deployment/api deployment/worker -n shoppulse
 
-# --- Apply manifests (skip secret.yaml template) ---
+# --- Apply manifests (secret.yaml is a template, the job already ran) ---
 Write-Host "==> Applying Kubernetes manifests..." -ForegroundColor Yellow
-Get-ChildItem $BuildDir -Filter "*.yaml" | Where-Object { $_.Name -ne "secret.yaml" } | ForEach-Object {
+Get-ChildItem $BuildDir -Filter "*.yaml" | Where-Object { $_.Name -notin @("secret.yaml", "migrate-job.yaml") } | ForEach-Object {
     kubectl apply -f $_.FullName
 }
 
-# --- Wait for frontend LB ---
-Write-Host "==> Waiting for frontend LoadBalancer IP..." -ForegroundColor Yellow
+# --- Wait for the ingress controller's public IP ---
+Write-Host "==> Waiting for the ingress LoadBalancer IP..." -ForegroundColor Yellow
 $deadline = (Get-Date).AddMinutes(5)
-$frontendIp = $null
+$ingressIp = $null
 while ((Get-Date) -lt $deadline) {
-    $frontendIp = kubectl get svc frontend -n shoppulse -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>$null
-    if ($frontendIp) { break }
+    $ingressIp = kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>$null
+    if ($ingressIp) { break }
     Start-Sleep -Seconds 10
 }
 
 Write-Host ""
 Write-Host "=== Deploy complete ===" -ForegroundColor Green
 kubectl get pods -n shoppulse
-kubectl get svc -n shoppulse
-if ($frontendIp) {
-    Write-Host "Frontend URL: http://$frontendIp" -ForegroundColor Green
+kubectl get ingress -n shoppulse
+if ($ingressIp) {
+    Write-Host "URL: https://$IngressHost  (ingress IP $ingressIp)" -ForegroundColor Green
+    Write-Host "The certificate is self-signed and the host has no public DNS, so reach it with:"
+    Write-Host "  curl -k --resolve ${IngressHost}:443:$ingressIp https://$IngressHost/api/dashboard"
+    Write-Host "or add '$ingressIp $IngressHost' to your hosts file."
 } else {
-    Write-Host "Frontend LB IP pending. Run: kubectl get svc frontend -n shoppulse -w"
+    Write-Host "Ingress IP pending. Run: kubectl get svc ingress-nginx-controller -n ingress-nginx -w"
 }

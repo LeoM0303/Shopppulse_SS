@@ -68,6 +68,11 @@ output "acr_name" {
   value       = module.acr.name
 }
 
+output "ingress_hostname" {
+  description = "Host the Ingress answers on (null when the ingress is disabled)"
+  value       = local.ingress_enabled ? var.ingress_hostname : null
+}
+
 output "log_analytics_workspace_name" {
   description = "Log Analytics workspace that holds platform, container and application telemetry (null when enable_monitoring=false)"
   value       = try(module.monitoring[0].workspace_name, null)

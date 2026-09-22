@@ -24,6 +24,16 @@ redis_sku_name    = "Balanced_B0"
 acr_sku           = "Premium"
 servicebus_sku    = "Standard"
 
+# Burstable SKUs cannot run zone-redundant HA, so dev relies on point-in-time
+# restore alone. Prod uses General Purpose and turns HA on.
+postgres_high_availability_enabled = false
+postgres_backup_retention_days     = 7
+
+# No public DNS for dev, so the certificate is self-signed for this name and
+# clients reach it with curl --resolve or a hosts entry.
+ingress_hostname      = "shoppulse.local"
+ingress_replica_count = 1
+
 # Observability. The daily cap matters more than retention on a student subscription:
 # ingestion is what costs money, and 1 GB/day is far more than this stack produces.
 log_retention_days = 30

@@ -82,3 +82,9 @@ variable "metrics_only_targets" {
   type        = list(string)
   default     = []
 }
+
+variable "logs_only_targets" {
+  description = "Keys of diagnostic_target_ids that expose logs but no metrics"
+  type        = list(string)
+  default     = []
+}

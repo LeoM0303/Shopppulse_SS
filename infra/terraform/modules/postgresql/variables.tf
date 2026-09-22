@@ -57,3 +57,15 @@ variable "geo_redundant_backup_enabled" {
   type    = bool
   default = false
 }
+
+variable "high_availability_enabled" {
+  description = "Zone-redundant HA with an automatic failover standby. Requires a General Purpose or Memory Optimized SKU."
+  type        = bool
+  default     = false
+}
+
+variable "standby_availability_zone" {
+  description = "Zone for the standby. Must differ from the primary, which is pinned to zone 1."
+  type        = string
+  default     = "2"
+}

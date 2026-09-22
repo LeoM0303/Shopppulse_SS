@@ -22,9 +22,20 @@ workload_node_vm_size   = "Standard_D4s_v4"
 workload_node_min_count = 2
 workload_node_max_count = 4
 
-# General Purpose instead of Burstable: predictable CPU and room for more storage.
+# General Purpose instead of Burstable: predictable CPU, room for more storage,
+# and the tier that zone-redundant HA requires in the first place.
 postgres_sku_name   = "GP_Standard_D2s_v3"
 postgres_storage_mb = 65536
+
+# A standby in another zone with automatic failover, the longest point-in-time
+# window Azure offers, and backups copied to the paired region.
+postgres_high_availability_enabled    = true
+postgres_backup_retention_days        = 35
+postgres_geo_redundant_backup_enabled = true
+
+# Two controllers so draining a node does not drop all inbound traffic.
+ingress_replica_count = 2
+# ingress_hostname = "shoppulse.example.com"
 
 redis_sku_name = "Balanced_B1"
 acr_sku        = "Premium"

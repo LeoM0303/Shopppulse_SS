@@ -56,6 +56,9 @@ services:
     build: ./api
     ports:
       - "8000:8000"
+    # One replica locally, so migrating in the entrypoint is safe. In the cluster
+    # this is a separate job that runs before the rollout.
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://shoppulse:localdev@postgres:5432/shoppulse
       REDIS_URL: redis://redis:6379/0

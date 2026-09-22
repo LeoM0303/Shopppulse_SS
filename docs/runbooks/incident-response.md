@@ -28,9 +28,13 @@ Then answer three questions, in this order.
 
 ```bash
 kubectl get pods
-kubectl get svc frontend
-curl -sS -o /dev/null -w '%{http_code}\n' "http://$(kubectl get svc frontend -o jsonpath='{.status.loadBalancer.ingress[0].ip}')/api/dashboard"
+kubectl get ingress
+IP="$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+curl -sSk -o /dev/null -w '%{http_code}\n' --resolve "shoppulse.local:443:$IP" https://shoppulse.local/api/dashboard
 ```
+
+`--resolve` because the dev host has no public DNS, `-k` because its certificate
+is self-signed. With a real domain both flags disappear.
 
 **Did anything change recently?** A deployment is the most likely cause of a
 sudden failure. Check the Deployments tab of the repository, and:
@@ -120,6 +124,50 @@ Most likely causes, in order: a bad `DATABASE_URL` after a secret change, the
 PostgreSQL private endpoint not resolving, or an image that was never pushed.
 `describe` distinguishes the last one immediately (`ImagePullBackOff`).
 
+### Nothing answers on the public address
+
+Sev 1. The ingress controller is the only way in, so start there rather than at
+the application.
+
+```bash
+kubectl get svc ingress-nginx-controller -n ingress-nginx
+kubectl get pods -n ingress-nginx
+kubectl logs deployment/ingress-nginx-controller -n ingress-nginx --tail=100
+kubectl describe ingress shoppulse -n shoppulse
+```
+
+What the symptoms mean:
+
+- **No external IP on the controller service** — Azure has not assigned a public IP. Check the service events and the subscription's public IP quota.
+- **503 from the controller** — the Ingress resolved but its backend has no ready endpoints. `kubectl get endpoints api frontend -n shoppulse` tells you which one.
+- **404 from the controller** — the request arrived with a host the Ingress does not serve. Compare the `Host` header against `ingress_hostname`.
+- **TLS error** — check that the `shoppulse-tls` secret exists in the `shoppulse` namespace. It is created by Terraform, so a namespace that was deleted and recreated by hand will be missing it: `terraform apply` puts it back.
+
+If a connection times out with no controller logs at all, suspect the NSG
+rather than Kubernetes — nothing reached the cluster:
+
+```bash
+az network nsg rule list --resource-group shoppulse-dev-rg --nsg-name shoppulse-dev-aks-nsg -o table
+```
+
+### A migration job failed
+
+Sev 1 during a deploy, because the pipeline stops before the rollout and the
+previous version keeps running — which is the good outcome.
+
+```bash
+kubectl get jobs -n shoppulse
+kubectl logs job/db-migrate-<tag> -n shoppulse --tail=200
+```
+
+Fix the revision and deploy again. Do not "unblock" the pipeline by deleting the
+job: the schema is either migrated or it is not, and a rollout against a
+half-migrated database is worse than a stopped deploy.
+
+If a migration succeeded but the new image is broken, rolling back the image is
+safe only when the migration was backwards compatible. If it was not, the
+options are a `downgrade` revision or a point-in-time restore — see below.
+
 ### Roll back a bad deployment
 
 This is the first action for any Sev 1 caused by a release.
@@ -165,8 +213,34 @@ az postgres flexible-server restore \
 
 Then verify the data on the restored server, update `database-url` in Key Vault
 to point at it, and re-run the deploy workflow so pods pick up the new secret.
-The retention window is `backup_retention_days` (7 by default), so a restore
-older than a week is not possible.
+The retention window is `postgres_backup_retention_days` — 7 days in dev, 35 in
+prod — so a restore older than that is not possible.
+
+### PostgreSQL failover in production
+
+Production runs zone-redundant HA with a standby in another zone. A zone
+failure fails over automatically in tens of seconds; the hostname does not
+change, but in-flight connections are dropped, so expect a burst of connection
+errors from the API and the worker followed by a recovery.
+
+```bash
+az postgres flexible-server show --resource-group shoppulse-prod-rg --name shoppulse-prod-psql \
+  --query "{state:state, ha:highAvailability}" -o json
+```
+
+If `highAvailability.state` is not `Healthy` after a failover, the standby is
+being rebuilt — the primary is serving, but a second zone failure is not
+survivable until it finishes.
+
+Test this deliberately rather than during an incident:
+
+```bash
+az postgres flexible-server restart --resource-group shoppulse-prod-rg \
+  --name shoppulse-prod-psql --failover Planned
+```
+
+Dev has no standby by design (Burstable SKUs cannot run HA), so there its
+recovery path is the point-in-time restore above.
 
 ### Report snapshots stopped appearing
 

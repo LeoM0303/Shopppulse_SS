@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shoppulse
+  namespace: shoppulse
+  annotations:
+    # Plain HTTP is answered only to redirect it.
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 1m
+spec:
+  ingressClassName: nginx
+  tls:
+    # Certificate and key come from Terraform, which is also what cert-manager
+    # would write here later on.
+    - secretName: shoppulse-tls
+      hosts:
+        - INGRESS_HOSTNAME
+  rules:
+    - host: INGRESS_HOSTNAME
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

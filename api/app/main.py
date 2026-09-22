@@ -4,10 +4,6 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# .database loads the .env file on import, so it must come before the routers,
-# which read os.environ at module level.
-from .database import engine
-from .models import Base
 from .routers import dashboard, events, reports
 from .telemetry import configure_telemetry, instrument_app
 
@@ -29,10 +25,9 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-async def on_startup():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+# The schema belongs to Alembic (`alembic upgrade head`, run by the db-migrate
+# job before a rollout), not to the application process. Creating tables on
+# startup raced between replicas and hid schema changes from review.
 
 
 @app.get("/healthz")

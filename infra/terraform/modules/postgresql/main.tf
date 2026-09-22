@@ -34,6 +34,17 @@ resource "azurerm_postgresql_flexible_server" "this" {
     password_auth_enabled = true
   }
 
+  # Zone-redundant HA keeps a standby in another availability zone and fails over
+  # automatically. Burstable SKUs do not support it, which is why dev runs without.
+  dynamic "high_availability" {
+    for_each = var.high_availability_enabled ? [1] : []
+
+    content {
+      mode                      = "ZoneRedundant"
+      standby_availability_zone = var.standby_availability_zone
+    }
+  }
+
   depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
 
   lifecycle {

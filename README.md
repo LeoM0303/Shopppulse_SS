@@ -50,8 +50,34 @@ One Terraform root under [infra/terraform/](infra/terraform/README.md): shared m
 Kubernetes manifests: [infra/terraform/k8s/README.md](infra/terraform/k8s/README.md).
 
 ```powershell
-kubectl get svc frontend -n shoppulse
+kubectl get ingress -n shoppulse
 ```
+
+## Network
+
+Every subnet has a network security group whose last rule is an explicit deny. The `aks` subnet accepts 80 and 443 from the internet plus load balancer probes, `postgres` accepts 5432 only from the `aks` prefix, and `private-endpoints` accepts only the ports its endpoints actually use, again only from `aks`. That subnet also enables network policies, because private endpoints ignore NSGs otherwise. Outbound is left at the Azure default on purpose: AKS has to reach the control plane, MCR and Entra ID, and locking egress down is a route table and Azure Firewall job, not an NSG one.
+
+ingress-nginx (pinned chart, installed by Terraform) owns the only public address. The frontend service is `ClusterIP`; one Ingress routes `/api` to the API and `/` to the frontend, and port 80 exists only to redirect to 443. The certificate is self-signed because the project has no registered domain — the Ingress references the `shoppulse-tls` secret by name, so switching to cert-manager and Let's Encrypt later touches nothing but `ingress.tf`.
+
+```powershell
+$ip = kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+curl -k --resolve shoppulse.local:443:$ip https://shoppulse.local/api/dashboard
+```
+
+## Database schema
+
+Alembic owns the schema; the application no longer creates tables at startup. Migrations run as a `db-migrate-<tag>` Kubernetes Job **before** the rollout, in both the workflow and `scripts/deploy.ps1`, so a failed migration stops the deploy while the previous version keeps serving. docker-compose runs `alembic upgrade head` in the API entrypoint, where there is a single replica and no race.
+
+```bash
+cd api
+alembic revision -m "add a column"    # then edit the generated file
+alembic upgrade head
+alembic downgrade -1
+```
+
+A database that predates this and already has the table is adopted with `alembic stamp 0001` instead of running the baseline.
+
+Availability differs by environment: dev is a Burstable server with 7-day point-in-time restore, prod is General Purpose with zone-redundant HA, a standby in zone 2, 35-day retention and geo-redundant backups.
 
 ## Observability
 
@@ -73,8 +99,8 @@ A failed upload is logged and dropped: storage is a side channel and must never 
 
 ## Decisions and runbooks
 
-- [`docs/adr/`](docs/adr/README.md) — why the Terraform root is single, why the data plane is private, why Workload Identity, why Azure Monitor.
-- [`docs/runbooks/incident-response.md`](docs/runbooks/incident-response.md) — severity levels, the first five minutes, KQL queries, rollback, database restore.
+- [`docs/adr/`](docs/adr/README.md) — why the Terraform root is single, why the data plane is private, why Workload Identity, why Azure Monitor, why NSGs and one TLS entry point, why Alembic, why HA only in prod.
+- [`docs/runbooks/incident-response.md`](docs/runbooks/incident-response.md) — severity levels, the first five minutes, KQL queries, ingress failures, failed migrations, rollback, database restore and failover.
 
 ## CI/CD (GitHub Actions)
 

@@ -49,6 +49,12 @@ variable "enable_servicebus" {
   default     = true
 }
 
+variable "enable_ingress" {
+  description = "true = ingress-nginx and a TLS certificate, so the cluster has one public entry point. Ignored when enable_aks=false."
+  type        = bool
+  default     = true
+}
+
 variable "enable_monitoring" {
   description = "true = Log Analytics, Container Insights, Application Insights, alerts and diagnostic settings."
   type        = bool
@@ -169,6 +175,24 @@ variable "postgres_admin_username" {
   default = "shoppulse"
 }
 
+variable "postgres_backup_retention_days" {
+  description = "How far back a point-in-time restore can go, 7 to 35 days"
+  type        = number
+  default     = 7
+}
+
+variable "postgres_geo_redundant_backup_enabled" {
+  description = "Copy backups to the paired region. Can only be set at creation time."
+  type        = bool
+  default     = false
+}
+
+variable "postgres_high_availability_enabled" {
+  description = "Zone-redundant HA with an automatic failover standby. Needs a General Purpose or Memory Optimized SKU, so it stays off in dev."
+  type        = bool
+  default     = false
+}
+
 # --- Redis ---
 
 variable "redis_sku_name" {
@@ -221,6 +245,26 @@ variable "key_vault_deployer_ip_cidrs" {
   description = "Optional override. Empty = auto-detect public IP via api.ipify.org when public KV access is enabled."
   type        = list(string)
   default     = []
+}
+
+# --- Ingress ---
+
+variable "ingress_nginx_chart_version" {
+  description = "Pinned ingress-nginx chart version, so a re-apply cannot silently upgrade the controller"
+  type        = string
+  default     = "4.15.1"
+}
+
+variable "ingress_replica_count" {
+  description = "Controller replicas. Two in prod so a node drain does not drop all traffic."
+  type        = number
+  default     = 1
+}
+
+variable "ingress_hostname" {
+  description = "Host the Ingress answers on and the name in the self-signed certificate. Replace with a real domain plus cert-manager when there is DNS."
+  type        = string
+  default     = "shoppulse.local"
 }
 
 # --- Monitoring ---

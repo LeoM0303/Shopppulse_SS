@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # The tag is part of the name because a Job is immutable, and because it makes
+  # "which migration ran for which release" answerable with kubectl alone.
+  name: db-migrate-IMAGE_TAG
+  namespace: shoppulse
+  labels:
+    app: db-migrate
+spec:
+  backoffLimit: 2
+  # Keep finished jobs around for a day for post-deploy inspection.
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: db-migrate
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        workload: apps
+      containers:
+        - name: migrate
+          image: ACR_LOGIN_SERVER/shoppulse-api:IMAGE_TAG
+          command: ["alembic", "upgrade", "head"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: shoppulse-secrets
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
