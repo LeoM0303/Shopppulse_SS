@@ -4,7 +4,7 @@ sqlalchemy==2.0.36
 alembic==1.20.0
 asyncpg==0.30.0
 redis==5.2.0
-azure-servicebus==7.12.3
+azure-servicebus==7.14.3
 pydantic==2.10.2
 pydantic-settings==2.6.1
 python-dotenv==1.0.1
