@@ -14,14 +14,40 @@ spec:
     metadata:
       labels:
         app: frontend
+      annotations:
+        checksum/config: CONFIG_CHECKSUM
     spec:
       nodeSelector:
         workload: apps
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: frontend
           image: ACR_LOGIN_SERVER/shoppulse-frontend:IMAGE_TAG
           ports:
-            - containerPort: 80
+            - containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
           resources:
             requests:
               cpu: 50m
@@ -42,4 +68,4 @@ spec:
     app: frontend
   ports:
     - port: 80
-      targetPort: 80
+      targetPort: 8080

@@ -95,6 +95,7 @@ locals {
       nsg_aks      = module.network[0].network_security_group_ids.aks
       nsg_postgres = module.network[0].network_security_group_ids.postgres
       nsg_pe       = module.network[0].network_security_group_ids.private_endpoints
+      nsg_ops      = module.network[0].network_security_group_ids.ops
     } : {}
   )
 }

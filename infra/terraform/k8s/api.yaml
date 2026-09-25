@@ -15,15 +15,29 @@ spec:
       labels:
         app: api
         azure.workload.identity/use: "true"
+      annotations:
+        checksum/config: CONFIG_CHECKSUM
     spec:
       serviceAccountName: api
       nodeSelector:
         workload: apps
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: api
           image: ACR_LOGIN_SERVER/shoppulse-api:IMAGE_TAG
           ports:
             - containerPort: 8000
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           envFrom:
             - configMapRef:
                 name: shoppulse-config
@@ -54,6 +68,12 @@ spec:
               port: 8000
             initialDelaySeconds: 10
             periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 20
           resources:
             requests:
               cpu: 100m
@@ -61,6 +81,12 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
