@@ -196,3 +196,61 @@ resource "azurerm_subnet" "private_endpoints" {
   # on for the subnet, which would make the NSG below decorative.
   private_endpoint_network_policies = "NetworkSecurityGroupEnabled"
 }
+
+# A second VNet, peered both ways, so the topology is more than one island.
+# Nothing lives here yet: it is the reserved place for a jumpbox or a
+# self-hosted runner, and the peering is what the junior network task asks for.
+resource "azurerm_virtual_network" "ops" {
+  name                = "${var.name_prefix}-ops-vnet"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.this.name
+  address_space       = [var.ops_vnet_address_space]
+  tags                = var.tags
+}
+
+resource "azurerm_subnet" "ops" {
+  name                 = "ops"
+  resource_group_name  = azurerm_resource_group.this.name
+  virtual_network_name = azurerm_virtual_network.ops.name
+  address_prefixes     = [var.ops_subnet_prefix]
+}
+
+resource "azurerm_network_security_group" "ops" {
+  name                = "${var.name_prefix}-ops-nsg"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = var.tags
+
+  security_rule {
+    name                       = "DenyAllInbound"
+    priority                   = 4096
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+resource "azurerm_subnet_network_security_group_association" "ops" {
+  subnet_id                 = azurerm_subnet.ops.id
+  network_security_group_id = azurerm_network_security_group.ops.id
+}
+
+resource "azurerm_virtual_network_peering" "app_to_ops" {
+  name                      = "${var.name_prefix}-app-to-ops"
+  resource_group_name       = azurerm_resource_group.this.name
+  virtual_network_name      = azurerm_virtual_network.this.name
+  remote_virtual_network_id = azurerm_virtual_network.ops.id
+  allow_forwarded_traffic   = true
+}
+
+resource "azurerm_virtual_network_peering" "ops_to_app" {
+  name                      = "${var.name_prefix}-ops-to-app"
+  resource_group_name       = azurerm_resource_group.this.name
+  virtual_network_name      = azurerm_virtual_network.ops.name
+  remote_virtual_network_id = azurerm_virtual_network.this.id
+  allow_forwarded_traffic   = true
+}

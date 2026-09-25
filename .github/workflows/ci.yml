@@ -45,6 +45,7 @@ jobs:
             python:
               - 'api/**'
               - 'worker/**'
+              - 'scripts/peex-sql*.sql'
               - '.github/workflows/ci.yml'
             dockerfiles:
               - '**/Dockerfile'
@@ -168,6 +169,60 @@ jobs:
           pip install -q -r requirements-dev.txt
           pytest -q
 
+  # Trainee Databases: a real psql session against a live engine, not SQL
+  # hidden inside the application. The log of this job is the PEEX artifact.
+  database:
+    name: SQL client session
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: shoppulse
+          POSTGRES_USER: shoppulse
+          POSTGRES_PASSWORD: localdev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U shoppulse -d shoppulse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: shoppulse
+      PGPASSWORD: localdev
+      PGDATABASE: shoppulse
+      DATABASE_URL: postgresql+asyncpg://shoppulse:localdev@localhost:5432/shoppulse
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Apply migrations
+        working-directory: api
+        run: |
+          pip install -q -r requirements.txt
+          alembic upgrade head
+
+      - name: Seed and run the client session
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+          psql -v ON_ERROR_STOP=1 -f scripts/peex-sql-seed.sql
+          {
+            echo "### SQL client session"
+            echo ""
+            echo '```'
+            psql -v ON_ERROR_STOP=1 -f scripts/peex-sql-session.sql
+            echo '```'
+          } | tee sql-session.txt >> "$GITHUB_STEP_SUMMARY"
+
   frontend:
     name: Frontend type check
     needs: changes
@@ -284,7 +339,7 @@ jobs:
   ci-ok:
     name: CI OK
     if: always()
-    needs: [changes, terraform, manifests, python, tests, frontend, dockerfiles, security, build]
+    needs: [changes, terraform, manifests, python, tests, database, frontend, dockerfiles, security, build]
     runs-on: ubuntu-latest
     steps:
       - name: Verify job results

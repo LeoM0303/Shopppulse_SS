@@ -22,5 +22,5 @@ module "monitoring" {
 
   diagnostic_target_ids = local.diagnostic_target_ids
   metrics_only_targets  = ["redis"]
-  logs_only_targets     = ["nsg_aks", "nsg_postgres", "nsg_pe"]
+  logs_only_targets     = ["nsg_aks", "nsg_postgres", "nsg_pe", "nsg_ops"]
 }

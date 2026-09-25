@@ -33,5 +33,11 @@ output "network_security_group_ids" {
     aks               = azurerm_network_security_group.aks.id
     postgres          = azurerm_network_security_group.postgres.id
     private_endpoints = azurerm_network_security_group.private_endpoints.id
+    ops               = azurerm_network_security_group.ops.id
   }
+}
+
+output "ops_vnet_id" {
+  description = "Peered ops VNet, reserved for a jumpbox or a self-hosted runner"
+  value       = azurerm_virtual_network.ops.id
 }

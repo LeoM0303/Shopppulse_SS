@@ -121,6 +121,8 @@ Get-ChildItem $K8sDir -Filter "*.yaml" | ForEach-Object {
     $content = $content.Replace("REPORTS_URL_VALUE", $ReportsUrl)
     $content = $content.Replace("REPORTS_CONTAINER_VALUE", $ReportsContainer)
     $content = $content.Replace("INGRESS_HOSTNAME", $IngressHost)
+    $configHash = (Get-FileHash (Join-Path $K8sDir "configmap.yaml") -Algorithm SHA256).Hash.ToLower()
+    $content = $content.Replace("CONFIG_CHECKSUM", $configHash)
     Set-Content -Path (Join-Path $BuildDir $_.Name) -Value $content -NoNewline
 }
 

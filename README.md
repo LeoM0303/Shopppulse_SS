@@ -97,6 +97,12 @@ The worker writes the dashboard summary to a private blob container after each r
 
 A failed upload is logged and dropped: storage is a side channel and must never cost us a queue message.
 
+## Security
+
+The baseline a trainee or junior should be able to walk through is in [`docs/security.md`](docs/security.md): secrets stay in Key Vault, identities are per-workload, containers run as non-root, images are scanned in CI, and NetworkPolicies close east-west ingress that NSGs cannot see.
+
+A live `psql` session that retrieves the engine version and the dashboard aggregates — the artifact PEEX asks for on Databases trainee — lives in [`scripts/peex-sql-session.sql`](scripts/peex-sql-session.sql) and runs in CI against Postgres 16.
+
 ## Decisions and runbooks
 
 - [`docs/adr/`](docs/adr/README.md) — why the Terraform root is single, why the data plane is private, why Workload Identity, why Azure Monitor, why NSGs and one TLS entry point, why Alembic, why HA only in prod.

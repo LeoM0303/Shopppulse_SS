@@ -181,6 +181,7 @@ jobs:
                 -e "s|REPORTS_URL_VALUE|${REPORTS_STORAGE_ACCOUNT_URL:-}|g" \
                 -e "s|REPORTS_CONTAINER_VALUE|${REPORTS_CONTAINER:-reports}|g" \
                 -e "s|INGRESS_HOSTNAME|$INGRESS_HOSTNAME|g" \
+                -e "s|CONFIG_CHECKSUM|$(sha256sum infra/terraform/k8s/configmap.yaml | awk '{print $1}')|g" \
                 "$file" > "build/k8s/$name"
           done
 

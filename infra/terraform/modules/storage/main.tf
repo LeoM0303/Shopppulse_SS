@@ -84,6 +84,17 @@ resource "azurerm_storage_container" "this" {
   depends_on = [time_sleep.wait_for_blob_rbac]
 }
 
+# A one-gigabyte file share next to the blob container, so the account is not
+# blob-only. Nothing mounts it yet: it is the trainee/junior proof that the
+# same account can serve object and file semantics.
+resource "azurerm_storage_share" "shared" {
+  name               = "shared"
+  storage_account_id = azurerm_storage_account.this.id
+  quota              = 1
+
+  depends_on = [time_sleep.wait_for_blob_rbac]
+}
+
 # Snapshots are read for a few days, then only needed for audits, so they move
 # down the tiers on their own instead of costing hot-tier money forever.
 resource "azurerm_storage_management_policy" "this" {
